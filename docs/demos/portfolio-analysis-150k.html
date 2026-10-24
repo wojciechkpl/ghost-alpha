@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GhostAlpha Portfolio Analysis — $150K</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149; --yellow: #d29922; --blue: #58a6ff; --purple: #bc8cff; --orange: #f0883e; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 20px; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  h2 { font-size: 1.15rem; margin: 24px 0 12px; color: var(--blue); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .grid { display: grid; gap: 16px; margin-bottom: 20px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h3 { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .card .value { font-size: 1.8rem; font-weight: 700; }
+  .card .detail { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+  .green { color: var(--green); } .red { color: var(--red); } .yellow { color: var(--yellow); } .blue { color: var(--blue); } .purple { color: var(--purple); } .orange { color: var(--orange); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  tr:hover { background: rgba(88,166,255,0.05); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-yellow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .badge-orange { background: rgba(240,136,62,0.15); color: var(--orange); }
+  .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-blue { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .chart-container { position: relative; height: 280px; }
+  .action-list { list-style: none; }
+  .action-list li { padding: 10px 12px; border-left: 3px solid var(--border); margin-bottom: 8px; background: rgba(255,255,255,0.02); border-radius: 0 6px 6px 0; }
+  .action-list .priority { font-weight: 700; margin-right: 8px; }
+  .gauge { width: 120px; height: 120px; position: relative; margin: 0 auto; }
+  .bar-h { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; margin-top: 4px; }
+  .bar-h .fill { height: 100%; border-radius: 4px; }
+  @media (max-width: 768px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>GhostAlpha Portfolio Analysis</h1>
+<p class="subtitle">$150,000 Budget | Sideways Regime | 2026-03-25 | Adaptive Engine Active</p>
+
+<!-- KPI Cards -->
+<div class="grid grid-4">
+  <div class="card">
+    <h3>Portfolio Value</h3>
+    <div class="value">$150,000</div>
+    <div class="detail">$105,260 invested | $44,740 cash</div>
+  </div>
+  <div class="card">
+    <h3>Market Regime</h3>
+    <div class="value yellow">Sideways</div>
+    <div class="detail">Breadth 55% | SPY near 200-SMA</div>
+  </div>
+  <div class="card">
+    <h3>Favorability</h3>
+    <div class="value blue">61.8</div>
+    <div class="detail">Neutral-Constructive | Selective deploy</div>
+  </div>
+  <div class="card">
+    <h3>Total Stop Risk</h3>
+    <div class="value green">$4,364</div>
+    <div class="detail">2.9% of portfolio | Target &lt;5%</div>
+  </div>
+</div>
+
+<!-- Microstructure + Strategy Weights -->
+<h2>Market Microstructure & Adaptive Strategy Weights</h2>
+<div class="grid grid-2">
+  <div class="card">
+    <h3>Microstructure State</h3>
+    <table>
+      <tr><td>Volatility Regime</td><td><span class="badge badge-green">Normal</span> VIX 18</td></tr>
+      <tr><td>Correlation Regime</td><td><span class="badge badge-green">Normal</span> 0.50 avg</td></tr>
+      <tr><td>Liquidity Calendar</td><td><span class="badge badge-green">Clear</span></td></tr>
+      <tr><td>Favorability Score</td><td><strong class="blue">0.62</strong> / 1.00</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Strategy Allocation</h3>
+    <div class="chart-container" style="height:200px">
+      <canvas id="strategyChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Sell Pressure Scores -->
+<h2>Sell Pressure Scores (Current Holdings)</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Ticker</th><th>Grade</th><th>SPS</th><th>Action</th><th>Trend Decay</th><th>Momentum</th><th>Drawdown</th><th>RS Fade</th><th>Time Decay</th><th style="text-align:right">P&L</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>NVDA</strong></td><td><span class="badge badge-blue">A+</span></td><td>14.5</td><td><span class="badge badge-green">HOLD</span></td><td><div class="bar-h"><div class="fill" style="width:12%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:15%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:10%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:8%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td class="green" style="text-align:right">+$1,880</td></tr>
+      <tr><td><strong>GOOGL</strong></td><td><span class="badge badge-blue">A+</span></td><td>16.8</td><td><span class="badge badge-green">HOLD</span></td><td><div class="bar-h"><div class="fill" style="width:15%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:18%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:15%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:12%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:25%;background:var(--green)"></div></div></td><td class="green" style="text-align:right">+$1,350</td></tr>
+      <tr><td><strong>AMD</strong></td><td><span class="badge badge-blue">A</span></td><td>22.4</td><td><span class="badge badge-green">HOLD</span></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:22%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:18%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:30%;background:var(--yellow)"></div></div></td><td class="green" style="text-align:right">+$1,680</td></tr>
+      <tr><td><strong>PLTR</strong></td><td><span class="badge badge-blue">A</span></td><td>26.0</td><td><span class="badge badge-yellow">WATCH</span></td><td><div class="bar-h"><div class="fill" style="width:25%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:28%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:25%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:22%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:35%;background:var(--yellow)"></div></div></td><td class="green" style="text-align:right">+$1,400</td></tr>
+      <tr><td><strong>AVGO</strong></td><td><span class="badge badge-green">B</span></td><td>18.5</td><td><span class="badge badge-green">HOLD</span></td><td><div class="bar-h"><div class="fill" style="width:18%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:18%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:15%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td class="green" style="text-align:right">+$600</td></tr>
+      <tr><td><strong>TSLA</strong></td><td><span class="badge badge-green">B</span></td><td>36.1</td><td><span class="badge badge-yellow">WATCH</span></td><td><div class="bar-h"><div class="fill" style="width:35%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:40%;background:var(--orange)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:35%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:38%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:40%;background:var(--orange)"></div></div></td><td class="green" style="text-align:right">+$760</td></tr>
+      <tr style="background:rgba(248,81,73,0.05)"><td><strong>DDOG</strong></td><td><span class="badge badge-green">B</span></td><td><strong class="red">59.3</strong></td><td><span class="badge badge-red">SELL</span></td><td><div class="bar-h"><div class="fill" style="width:65%;background:var(--red)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:58%;background:var(--orange)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:70%;background:var(--red)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:62%;background:var(--red)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:55%;background:var(--orange)"></div></div></td><td class="red" style="text-align:right">-$900</td></tr>
+      <tr><td><strong>AAPL</strong></td><td><span class="badge badge-green">B</span></td><td>22.6</td><td><span class="badge badge-green">HOLD</span></td><td><div class="bar-h"><div class="fill" style="width:22%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:25%;background:var(--yellow)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:22%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:20%;background:var(--green)"></div></div></td><td><div class="bar-h"><div class="fill" style="width:30%;background:var(--yellow)"></div></div></td><td class="green" style="text-align:right">+$810</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Multi-Horizon Scoring -->
+<h2>Multi-Horizon Scoring</h2>
+<div class="grid grid-2">
+  <div class="card">
+    <h3>Current Holdings</h3>
+    <div class="chart-container">
+      <canvas id="horizonHoldings"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Candidates</h3>
+    <div class="chart-container">
+      <canvas id="horizonCandidates"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Position Sizing -->
+<h2>Position Sizing Recommendations (VolatilityTarget)</h2>
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Candidate</th><th>Composite</th><th>RS</th><th>Price</th><th>ATR</th><th>Stop</th><th>Shares</th><th>Amount</th><th>Risk $</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>CRWD</strong></td><td class="green">89</td><td>94</td><td>$385</td><td>$8.50</td><td>$368</td><td><strong>38</strong></td><td>$14,630</td><td>$646</td><td><span class="badge badge-green">BUY</span></td></tr>
+      <tr><td><strong>PANW</strong></td><td class="green">85</td><td>88</td><td>$420</td><td>$12.00</td><td>$396</td><td><strong>35</strong></td><td>$14,700</td><td>$840</td><td><span class="badge badge-green">BUY</span></td></tr>
+      <tr><td>META</td><td class="blue">82</td><td>85</td><td>$620</td><td>$18.00</td><td>$584</td><td>24</td><td>$14,880</td><td>$864</td><td><span class="badge badge-yellow">DEFER</span></td></tr>
+      <tr><td>NOW</td><td class="blue">80</td><td>82</td><td>$950</td><td>$22.00</td><td>$906</td><td>15</td><td>$14,250</td><td>$660</td><td><span class="badge badge-yellow">DEFER</span></td></tr>
+      <tr><td>SNPS</td><td>78</td><td>80</td><td>$520</td><td>$9.50</td><td>$501</td><td>0</td><td>$0</td><td>$0</td><td><span class="badge badge-orange">NO</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Attribution -->
+<h2>Performance Attribution (Q4 2025)</h2>
+<div class="grid grid-2">
+  <div class="card">
+    <h3>Alpha Decomposition (+470 bps)</h3>
+    <div class="chart-container">
+      <canvas id="attributionChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Portfolio vs Benchmark</h3>
+    <div class="chart-container">
+      <canvas id="performanceChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Action Plan -->
+<h2>Priority Action Plan</h2>
+<div class="card">
+  <ol class="action-list">
+    <li style="border-color:var(--red)"><span class="priority red">P1</span> <strong>SELL DDOG</strong> — 50 shares @ $112. Harvest $900 tax loss. SPS 59.3 (SELL signal).</li>
+    <li style="border-color:var(--green)"><span class="priority green">P2</span> <strong>BUY CRWD</strong> — 38 shares @ $385 = $14,630. Stop $368. Composite 89, RS 94.</li>
+    <li style="border-color:var(--green)"><span class="priority green">P3</span> <strong>BUY PANW</strong> — 35 shares @ $420 = $14,700. Stop $396. Composite 85, RS 88.</li>
+    <li style="border-color:var(--yellow)"><span class="priority yellow">P4</span> <strong>TIGHTEN TSLA</strong> — Move stop from $250 to $258 (1.5x ATR). SPS 36.1 WATCH zone.</li>
+    <li style="border-color:var(--blue)"><span class="priority blue">P5</span> <strong>HOLD CASH</strong> — Keep $15,410 (10.3%) as reserve. CDS 47.25 = wait for setup.</li>
+    <li style="border-color:var(--muted)"><span class="priority">P6</span> <strong>WATCHLIST META</strong> — Add on pullback to $590 if regime improves.</li>
+  </ol>
+</div>
+
+<!-- Post-Rebalance Summary -->
+<h2>Post-Rebalance Portfolio</h2>
+<div class="grid grid-3">
+  <div class="card">
+    <h3>Positions</h3>
+    <div class="value">9</div>
+    <div class="detail">Was 8 | Target 8-12</div>
+  </div>
+  <div class="card">
+    <h3>Cash Reserve</h3>
+    <div class="value green">13.9%</div>
+    <div class="detail">$20,865 | Target 10-20%</div>
+  </div>
+  <div class="card">
+    <h3>Underwater Positions</h3>
+    <div class="value green">0</div>
+    <div class="detail">Was 1 (DDOG) | Sold</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="chart-container" style="height:320px">
+    <canvas id="portfolioChart"></canvas>
+  </div>
+</div>
+
+<script>
+// Strategy Weights Doughnut
+new Chart(document.getElementById('strategyChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['MeanReversion 31.7%', 'TrendStrength 29.0%', 'Minervini 26.7%', 'Breakout 18.3%'],
+    datasets: [{ data: [31.7, 29.0, 26.7, 18.3], backgroundColor: ['#58a6ff','#bc8cff','#3fb950','#f0883e'], borderWidth: 0 }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 } } } } }
+});
+
+// Multi-Horizon Holdings
+new Chart(document.getElementById('horizonHoldings'), {
+  type: 'bar',
+  data: {
+    labels: ['NVDA','GOOGL','AMD','PLTR','AVGO','TSLA','DDOG','AAPL'],
+    datasets: [
+      { label: 'Swing', data: [72,68,65,58,62,55,35,60], backgroundColor: '#f0883e' },
+      { label: 'Position', data: [85,80,74,70,72,60,42,68], backgroundColor: '#58a6ff' },
+      { label: 'Trend', data: [91,86,78,75,80,64,48,73], backgroundColor: '#bc8cff' },
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#8b949e' }, grid: { display: false } }, y: { min: 0, max: 100, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } }, plugins: { legend: { labels: { color: '#8b949e' } } } }
+});
+
+// Multi-Horizon Candidates
+new Chart(document.getElementById('horizonCandidates'), {
+  type: 'bar',
+  data: {
+    labels: ['CRWD','PANW','META','NOW','SNPS'],
+    datasets: [
+      { label: 'Swing', data: [82,75,70,65,60], backgroundColor: '#f0883e' },
+      { label: 'Position', data: [88,83,78,76,72], backgroundColor: '#58a6ff' },
+      { label: 'Trend', data: [86,81,82,80,76], backgroundColor: '#bc8cff' },
+    ]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#8b949e' }, grid: { display: false } }, y: { min: 0, max: 100, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } }, plugins: { legend: { labels: { color: '#8b949e' } } } }
+});
+
+// Attribution Waterfall
+new Chart(document.getElementById('attributionChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Selection','Timing','Sizing','Strategy','Interaction','Total'],
+    datasets: [{
+      data: [185, 72, 95, 88, 30, 470],
+      backgroundColor: ['#3fb950','#58a6ff','#bc8cff','#f0883e','#8b949e','#3fb950'],
+      borderRadius: 4,
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { ticks: { color: '#8b949e', callback: v => v + ' bps' }, grid: { color: '#21262d' } }, y: { ticks: { color: '#e6edf3' }, grid: { display: false } } }, plugins: { legend: { display: false } } }
+});
+
+// Performance Chart
+new Chart(document.getElementById('performanceChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Portfolio', 'SPY Benchmark'],
+    datasets: [{
+      data: [8.2, 3.5],
+      backgroundColor: ['#3fb950', '#58a6ff'],
+      borderRadius: 6,
+      barThickness: 50,
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { color: '#8b949e', callback: v => v + '%' }, grid: { color: '#21262d' } }, x: { ticks: { color: '#e6edf3' }, grid: { display: false } } }, plugins: { legend: { display: false } } }
+});
+
+// Post-Rebalance Portfolio Allocation
+new Chart(document.getElementById('portfolioChart'), {
+  type: 'bar',
+  data: {
+    labels: ['CRWD','PANW','GOOGL','AMD','PLTR','NVDA','AAPL','TSLA','AVGO','Cash'],
+    datasets: [{
+      label: '% of Portfolio',
+      data: [9.75, 9.80, 6.40, 5.92, 5.73, 4.85, 4.44, 3.71, 2.15, 13.91],
+      backgroundColor: ['#3fb950','#3fb950','#58a6ff','#58a6ff','#58a6ff','#58a6ff','#bc8cff','#bc8cff','#bc8cff','#30363d'],
+      borderRadius: 4,
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { color: '#8b949e', callback: v => v + '%' }, grid: { color: '#21262d' } }, x: { ticks: { color: '#e6edf3' }, grid: { display: false } } }, plugins: { legend: { display: false } } }
+});
+</script>
+
+<p style="color:var(--muted);font-size:0.75rem;text-align:center;margin-top:32px;">
+  Generated by GhostAlpha Adaptive Engine v2.0 | Not financial advice | 2026-03-25
+</p>
+</body>
+</html>

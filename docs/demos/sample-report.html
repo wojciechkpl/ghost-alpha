@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ghost Alpha — EXAMPLE Diversification Plan</title>
+<style>
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+header { border-bottom: 2px solid #343a40; padding-bottom: 0.75rem; margin-bottom: 2rem; }
+header h1 { font-size: 1.6rem; color: #1c7ed6; }
+.meta { font-size: 0.8rem; color: #868e96; margin-top: 0.25rem; }
+section { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+section h2 { font-size: 1.1rem; color: #343a40; margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid #e9ecef; }
+section h3 { font-size: 0.95rem; color: #495057; margin: 1rem 0 0.5rem; }
+.kpi-grid { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.kpi { flex: 0 0 auto; min-width: 130px; border-radius: 6px; padding: 0.75rem 1rem; text-align: center; }
+.kpi-label { font-size: 0.72rem; color: #495057; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
+.kpi-value { font-size: 1.25rem; font-weight: 700; }
+.kpi-sub { font-size: 0.7rem; color: #868e96; margin-top: 0.2rem; }
+.kpi-good { background: #d3f9d8; }
+.kpi-warn { background: #fff3bf; }
+.kpi-bad { background: #ffe3e3; }
+.kpi-neutral { background: #e9ecef; }
+table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; font-size: 0.85rem; }
+th, td { border: 1px solid #dee2e6; padding: 0.45rem 0.7rem; }
+th { background: #f1f3f5; text-align: center; font-weight: 600; color: #495057; }
+td { text-align: right; }
+td:first-child { text-align: left; }
+tr:nth-child(even) td { background: #f8f9fa; }
+tr.optimal td { background: #d3f9d8 !important; font-weight: 600; }
+.win { color: #2b8a3e; font-weight: 600; }
+.loss { color: #c92a2a; font-weight: 600; }
+.summary { font-size: 0.85rem; color: #495057; margin-bottom: 0.75rem; }
+.empty { font-size: 0.85rem; color: #868e96; font-style: italic; }
+.chart-container { margin-top: 1rem; overflow-x: auto; }
+footer { text-align: center; font-size: 0.75rem; color: #adb5bd; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }
+@media (prefers-color-scheme: dark) {
+  body { background: #1a1b1e; color: #c1c2c5; }
+  header { border-bottom-color: #495057; }
+  header h1 { color: #74c0fc; }
+  section { background: #25262b; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+  section h2 { color: #e9ecef; border-bottom-color: #373a40; }
+  th { background: #2c2e33; color: #ced4da; }
+  td { color: #c1c2c5; }
+  tr:nth-child(even) td { background: #2c2e33; }
+  tr.optimal td { background: #1b4332 !important; }
+  .kpi-good { background: #1b4332; }
+  .kpi-warn { background: #664d03; }
+  .kpi-bad { background: #5c2020; }
+  .kpi-neutral { background: #343a40; }
+  .kpi-label { color: #adb5bd; }
+  footer { border-top-color: #495057; }
+}
+@media print { body { max-width: 100%; } section { break-inside: avoid; } }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Concentrated Position Diversification Plan</h1>
+  <p class="meta">EXAMPLE &nbsp;|&nbsp; 500 shares @ $100.00 &nbsp;|&nbsp; State: XX &nbsp;|&nbsp; Generated: (synthetic example data)</p>
+</header>
+<main>
+<section>
+<h2>1. Position Summary</h2>
+<div class="kpi-grid">
+  <div class="kpi kpi-neutral"><div class="kpi-label">Shares</div><div class="kpi-value">2000</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Price</div><div class="kpi-value">$215.00</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Market Value</div><div class="kpi-value">$430K</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Cost Basis</div><div class="kpi-value">$120K</div></div>
+  <div class="kpi kpi-good"><div class="kpi-label">Unrealised Gain</div><div class="kpi-value">$310K (258.3%)</div></div>
+  <div class="kpi kpi-bad"><div class="kpi-label">Concentration</div><div class="kpi-value">84%</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Holding</div><div class="kpi-value">Long-term</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Other Income</div><div class="kpi-value">$200K</div></div>
+</div>
+</section>
+<section>
+<h2>2. Tax Scenario Comparison (State: XX)</h2>
+<p class="summary"><strong>Recommendation:</strong> Spread over <strong>3 years</strong> to save <strong>$2.2K</strong> vs lump-sum sale. The savings plateau occurs when annual gains drop below the state deduction threshold.</p>
+<table>
+<thead><tr><th>Years</th><th>Shares/yr</th><th>Proceeds</th><th>Gain</th><th>Federal</th><th>State</th><th>Eff %</th><th>Savings</th></tr></thead>
+<tbody><tr><td>1</td><td>2000</td><td>$430K</td><td>$310K</td><td>$46K</td><td>$2.2K</td><td>19.5%</td><td>$0</td></tr><tr><td>2</td><td>1000</td><td>$430K</td><td>$310K</td><td>$46K</td><td>$0</td><td>18.8%</td><td>$2.2K</td></tr><tr class="optimal"><td>3</td><td>667</td><td>$430K</td><td>$310K</td><td>$46K</td><td>$0</td><td>18.8%</td><td>$2.2K</td></tr><tr><td>4</td><td>500</td><td>$430K</td><td>$310K</td><td>$46K</td><td>$0</td><td>18.8%</td><td>$2.2K</td></tr><tr><td>5</td><td>400</td><td>$430K</td><td>$310K</td><td>$46K</td><td>$0</td><td>18.8%</td><td>$2.2K</td></tr></tbody>
+</table>
+</section>
+<section>
+<h2>3. Selling Programme — 2-Year Plan</h2>
+<div class="kpi-grid" style="margin-bottom:1rem">
+  <div class="kpi kpi-neutral"><div class="kpi-label">Total Proceeds</div><div class="kpi-value">$430K</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Total Tax</div><div class="kpi-value">$58K</div></div>
+  <div class="kpi kpi-good"><div class="kpi-label">After-Tax</div><div class="kpi-value">$372K</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Effective Rate</div><div class="kpi-value">18.8%</div></div>
+</div>
+<h3>Year-by-Year Projection</h3>
+<table>
+<thead><tr><th>Year</th><th>Shares</th><th>Proceeds</th><th>Gain</th><th>Tax</th><th>Eff %</th></tr></thead>
+<tbody><tr><td>2026</td><td>1000</td><td>$215K</td><td>$155K</td><td>$29K</td><td>18.8%</td></tr><tr><td>2027</td><td>1000</td><td>$215K</td><td>$155K</td><td>$29K</td><td>18.8%</td></tr></tbody>
+</table>
+<h3>Quarterly Schedule</h3>
+<table style="max-width:300px">
+<thead><tr><th>Period</th><th>Shares</th></tr></thead>
+<tbody><tr><td>Y1 Q1</td><td>250</td></tr><tr><td>Y1 Q2</td><td>250</td></tr><tr><td>Y1 Q3</td><td>250</td></tr><tr><td>Y1 Q4</td><td>250</td></tr><tr><td>Y2 Q1</td><td>250</td></tr><tr><td>Y2 Q2</td><td>250</td></tr><tr><td>Y2 Q3</td><td>250</td></tr><tr><td>Y2 Q4</td><td>250</td></tr></tbody>
+</table>
+</section>
+<section>
+<h2>4. Target Allocation — Moderate on Fidelity</h2>
+<p class="summary">Balanced growth and income. Suited for 5-10 year horizon. &nbsp;|&nbsp; Blended ER: <strong>0.0233%</strong></p>
+<table>
+<thead><tr><th>Asset Class</th><th>Ticker</th><th>Fund</th><th>ER</th><th>Amount</th><th>TLH Partner</th><th>Transferable</th></tr></thead>
+<tbody><tr><td>US Broad Market</td><td>FZROX</td><td>Fidelity ZERO Total Market</td><td>0.000%</td><td>$128K</td><td>FSKAX</td><td>No</td></tr><tr><td>US Large Cap</td><td>FNILX</td><td>Fidelity ZERO Large Cap</td><td>0.000%</td><td>$51K</td><td>FXAIX</td><td>No</td></tr><tr><td>Intl Developed</td><td>FZILX</td><td>Fidelity ZERO Intl Index</td><td>0.000%</td><td>$51K</td><td>FTIHX</td><td>No</td></tr><tr><td>Intl Emerging</td><td>FPADX</td><td>Fidelity Emerging Markets Index</td><td>0.075%</td><td>$26K</td><td>—</td><td>Yes</td></tr><tr><td>US Bonds</td><td>FXNAX</td><td>Fidelity US Bond Index</td><td>0.025%</td><td>$128K</td><td>—</td><td>Yes</td></tr><tr><td>TIPS</td><td>FIPDX</td><td>Fidelity Inflation-Protected Bond Index</td><td>0.050%</td><td>$26K</td><td>—</td><td>Yes</td></tr><tr><td>Real Estate</td><td>FREL</td><td>Fidelity MSCI Real Estate ETF</td><td>0.084%</td><td>$51K</td><td>—</td><td>Yes</td></tr><tr><td>US Small Cap</td><td>FSSNX</td><td>Fidelity Small Cap Index</td><td>0.025%</td><td>$26K</td><td>—</td><td>Yes</td></tr></tbody>
+</table>
+</section>
+<section>
+<h2>5. Geopolitical Risk Assessment</h2>
+<div class="kpi-grid">
+  <div class="kpi kpi-neutral"><div class="kpi-label">Oil (Brent)</div><div class="kpi-value">$85</div><div class="kpi-sub">0.18/2.5</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">VIX</div><div class="kpi-value">18.0</div><div class="kpi-sub">0.00/2.5</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">Gold 3m</div><div class="kpi-value">3.0%</div><div class="kpi-sub">0.00/2.5</div></div>
+  <div class="kpi kpi-neutral"><div class="kpi-label">DXY 3m</div><div class="kpi-value">1.0%</div><div class="kpi-sub">0.00/2.5</div></div>
+</div>
+<p style="margin-top:1rem"><strong>Composite:</strong> <span style="font-size:1.3em;color:#2b8a3e">0.2/10 — Low</span></p>
+<h3>Suggested Allocation Adjustments</h3>
+<table style="max-width:400px">
+<thead><tr><th>Sector</th><th>Adjustment</th></tr></thead>
+<tbody><tr><td colspan="2">No adjustments — risk is low.</td></tr></tbody>
+</table>
+</section>
+<section>
+<h2>6. Concentration Decay — Projected Volatility Reduction</h2>
+<p class="summary">As you sell down EXAMPLE, your portfolio's estimated annual volatility drops from <strong>31.2%</strong> to <strong>14.0%</strong> — a <strong>55%</strong> reduction in risk.</p>
+<div class="chart-container"><svg xmlns="http://www.w3.org/2000/svg" width="860" height="320" viewBox="0 0 860 320"><rect width="860" height="320" fill="#1a1a2e"/><text x="430.0" y="18" fill="#ddd" font-size="13" text-anchor="middle">Portfolio Volatility Decay</text><path d="M60.0,270.0 L60.0,51.8 L157.5,54.8 L255.0,59.0 L352.5,64.9 L450.0,74.3 L547.5,83.2 L645.0,93.9 L742.5,124.7 L840.0,172.2 L840.0,270.0 Z" fill="rgba(99,102,241,0.2)"/><path d="M60.0,51.8 L157.5,54.8 L255.0,59.0 L352.5,64.9 L450.0,74.3 L547.5,83.2 L645.0,93.9 L742.5,124.7 L840.0,172.2" fill="none" stroke="#6366f1" stroke-width="2.5"/><circle cx="60.0" cy="51.8" r="3.5" fill="#6366f1"/><text x="60.0" y="43.8" fill="#aaa" font-size="10" text-anchor="middle">31.2%</text><text x="60.0" y="285.0" fill="#888" font-size="9" text-anchor="middle">2026 Q0</text><circle cx="157.5" cy="54.8" r="3.5" fill="#6366f1"/><circle cx="255.0" cy="59.0" r="3.5" fill="#6366f1"/><text x="255.0" y="51.0" fill="#aaa" font-size="10" text-anchor="middle">30.2%</text><text x="255.0" y="285.0" fill="#888" font-size="9" text-anchor="middle">2026 Q2</text><circle cx="352.5" cy="64.9" r="3.5" fill="#6366f1"/><circle cx="450.0" cy="74.3" r="3.5" fill="#6366f1"/><text x="450.0" y="66.3" fill="#aaa" font-size="10" text-anchor="middle">28.0%</text><text x="450.0" y="285.0" fill="#888" font-size="9" text-anchor="middle">2026 Q4</text><circle cx="547.5" cy="83.2" r="3.5" fill="#6366f1"/><circle cx="645.0" cy="93.9" r="3.5" fill="#6366f1"/><text x="645.0" y="85.9" fill="#aaa" font-size="10" text-anchor="middle">25.2%</text><text x="645.0" y="285.0" fill="#888" font-size="9" text-anchor="middle">2027 Q2</text><circle cx="742.5" cy="124.7" r="3.5" fill="#6366f1"/><circle cx="840.0" cy="172.2" r="3.5" fill="#6366f1"/><text x="840.0" y="164.2" fill="#aaa" font-size="10" text-anchor="middle">14.0%</text><text x="840.0" y="285.0" fill="#888" font-size="9" text-anchor="middle">2027 Q4</text><text x="15" y="150.0" fill="#888" font-size="10" transform="rotate(-90,15,150.0)" text-anchor="middle">Annual Vol %</text></svg></div>
+</section>
+</main>
+<footer>
+  <p>Ghost Alpha Diversification Engine &mdash; generated 2026-03-24 05:57</p>
+  <p style="margin-top:4px">This is not financial advice. Consult a CPA and RIA before executing any selling programme.</p>
+</footer>
+</body>
+</html>

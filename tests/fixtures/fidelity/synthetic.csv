@@ -1,0 +1,10 @@
+﻿Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type,
+EX0000003,Individual,FCASH**,HELD IN FCASH,,,,$100.00,,,,,0.28%,,,Cash,
+EX0000003,Individual,AAPL,APPLE INC,100,$250.00,+$0.00,$25000.00,+$0.00,+0.00%,+$10000.00,+66.67%,71.23%,$15000.00,$150.00,Cash,
+EX0000003,Individual,SPAXX,FIDELITY GOVERNMENT MONEY MARKET,10000,$1.00,$0.00,$10000.00,--,--,--,--,28.49%,--,--,Cash,
+
+"The data and information in this spreadsheet is provided to you solely for your use ..."
+
+"Brokerage services are provided by Fidelity Brokerage Services LLC ..."
+
+"Date downloaded May-01-2026 4:00 p.m ET"

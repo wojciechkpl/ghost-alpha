@@ -1,0 +1,101 @@
+# Per-asset-class long-run nominal CAGR (μ_arith) and annual volatility (σ_arith).
+# Values draw on Ibbotson SBBI 1926-2024 long-run averages with
+# valuation-driven haircuts. Edit freely to reflect your own assumptions.
+#
+# Loaded by AssetClassLibrary::from_toml_file(). The `source` field is required
+# in the file but not currently surfaced via the public API.
+
+[us_large_cap_index]
+mean   = 0.085
+vol    = 0.16
+source = "Ibbotson 1926-2024 ~10%, haircut for elevated 2026 CAPE"
+
+[us_total_market]
+mean   = 0.080
+vol    = 0.16
+source = "US large + small/mid drag in 2024-2026 regime"
+
+[us_quality_factor]
+mean   = 0.085
+vol    = 0.15
+source = "Quality factor premium ~0pp vs cap-weighted in this regime"
+
+[us_blue_chip_growth]
+mean   = 0.090
+vol    = 0.20
+source = "Active growth fund; modest premium over index, higher vol"
+
+[tech_mega_cap]
+mean   = 0.100
+vol    = 0.32
+source = "Single-name tech mega-cap; growth premium offset by idiosync risk"
+
+[consumer_mega_cap]
+mean   = 0.090
+vol    = 0.30
+source = "AMZN-shape; consumer/cloud blend, more diversified than pure tech"
+
+[international_developed]
+mean   = 0.070
+vol    = 0.18
+source = "MSCI EAFE long-run; FX-unhedged"
+
+[emerging_asia]
+mean   = 0.080
+vol    = 0.24
+source = "Emerging Asia tilt; higher growth, higher vol"
+
+[energy_sector]
+mean   = 0.060
+vol    = 0.28
+source = "Cyclical, no secular tailwind; inflation hedge only"
+
+[aerospace_defense]
+mean   = 0.090
+vol    = 0.20
+source = "Multi-year defense spending cycle"
+
+[industrial]
+mean   = 0.080
+vol    = 0.22
+source = "Single-name industrial; cyclical with broad-equity beta"
+
+[cash_mmf]
+mean   = 0.040
+vol    = 0.005
+source = "Fed normalizes to ~3-4% terminal rate over horizon"
+
+[us_treasury_intermediate]
+mean   = 0.045
+vol    = 0.08
+source = "IEF — 7-10y; current yield + small duration roll"
+
+[us_treasury_long]
+mean   = 0.050
+vol    = 0.18
+source = "TLT — 20+y; longer duration, more rate sensitivity"
+
+[us_tips]
+mean   = 0.040
+vol    = 0.06
+source = "SCHP — real ~2% + breakeven inflation"
+
+[gold]
+mean   = 0.050
+vol    = 0.16
+source = "Long-run nominal gold; near-zero correlation to equities"
+
+[managed_futures]
+mean   = 0.060
+vol    = 0.14
+source = "DBMF — long-run trend-following; near-zero correlation"
+
+[intl_developed_etf]
+mean   = 0.070
+vol    = 0.18
+source = "VXUS — same asset class as international_developed, ETF wrapper"
+
+[emerging_markets_etf]
+mean   = 0.080
+vol    = 0.22
+source = "VWO — broad EM ETF, same class as emerging_asia"

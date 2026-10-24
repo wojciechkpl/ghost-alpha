@@ -1,0 +1,138 @@
+# Changelog
+
+All notable changes to GhostAlpha are documented in this file.
+
+## [Unreleased] — v2.0
+
+### Bring-your-own-data for `ghost-alpha plan`
+- **New:** `ghost-alpha init-data <DIR>` writes editable templates (positions, vesting, symbol map, plan.toml)
+- **New:** `plan --data-dir` / `GHOST_ALPHA_DATA_DIR` discovers `positions/*.csv`, `vesting.csv`, `symbol_map.toml`, `plan.toml`
+- **New:** positions auto-detect — Fidelity export or simple `symbol,quantity,price[,cost_basis][,account]` CSV
+- **New:** minimal vesting CSV (`symbol,vesting_date,quantity`)
+- **New:** user `symbol_map.toml` merged over a generic built-in map, with optional `default_class` fallback
+- **New:** any concentrated ticker (`--symbol`, inferred if omitted); unwind parameters are inputs (`--ltcg-rate`, `--floor-pct`, `--cost-basis`, `--unwind`)
+- **Changed:** `--withhold-rate` default 0.37 → 0.22; output columns `amzn_*` → `concentrated_*`
+- **Changed:** test fixtures are fully synthetic
+
+### Phase 7: Portfolio Plan Pipeline
+- **New:** `ghost-alpha plan` command — end-to-end forward-NAV projection pipeline
+- **New:** 11 gaps shipped (~30 SP, 282 new tests across lib + 4 integration suites)
+- **New:** `src/projection/monte_carlo.rs` — Lognormal MC with 5000 paths, block-correlation Σ (PSD-enforced)
+- **New:** `src/projection/asset_class_library.rs` — TOML-loaded per-asset μ/σ library (19 asset classes)
+- **New:** `src/projection/scenario.rs` — ScenarioPath + walk_price (Hold/SellReinvest/OptionBUnwind)
+- **New:** `src/projection/portfolio_nav.rs` — project_path for multi-year MC simulation
+- **New:** `src/projection/output.rs` — CSV + audit JSON emitters
+- **New:** `src/portfolio/symbol_map.rs` — Ticker → AssetClass lookup (23 tickers)
+- **New:** `src/portfolio/vesting.rs` — VestingEvent + DistributionSchedule (unified vesting ETL)
+- **New:** `src/portfolio/concentration.rs` — compute_k_max single-name floor solver (concentration-aware unwind)
+- **New:** `src/portfolio/sequencer.rs` — route_cash (Greedy + ProRata allocation)
+- **New:** `src/portfolio/import.rs` extensions — Fidelity Portfolio_Positions ETL (BOM + disclaimer + FCASH** sleeve handling)
+- **New:** `src/plans/rule_10b5_1.rs` — SEC Rule 10b5-1(c)(1) plan generator with cooling-off + execution dates + share sizing
+- **New:** `src/output/plan_10b5_1_md.rs` — Markdown rendering for Plan10b5_1
+- **New:** `src/cli/plan.rs` — run_plan_pipeline orchestrator (composes projection stack)
+- **New:** `src/output/mermaid.rs` — quote_label_if_needed for strict Mermaid renderers
+- **New:** `config/asset_classes.toml` — canonical per-class μ/σ assumptions (19 classes, hand-curated)
+- **New:** `tests/forward_nav_matches_python.rs` — cross-language validation (within 1% year-5 NAV)
+- **New:** `tests/mc_returns_match_python.rs` — lognormal MC path validation
+- **New:** `tests/monte_carlo_smoke.rs` — MC engine smoke tests
+- **New:** `tests/output_csv_round_trip.rs` — CSV round-trip validation
+- **New:** `benches/projection_mc.rs` — Criterion bench (11.2 ms / 5000 paths)
+- **New:** `tests/fixtures/fidelity/`, `tests/fixtures/python_mc/`, `tests/fixtures/vesting/` — test data fixtures
+- Cross-validated against an independent Python reference implementation: within 1% on year-5 NAV for all three treatments
+- Output artifacts: `nav_projection.csv` (percentile bands), `nav_mc_paths.csv` (raw paths), `audit.json` (reproducibility receipt)
+
+### Phase 8: Broker Integration
+- **New:** `ghost-alpha execute` command with Alpaca API (dry-run, paper, live modes)
+- **New:** `src/broker/alpaca.rs` — AlpacaClient with get_account, get_positions, submit_order
+- Dry-run mode works without credentials for safe previewing
+
+### Phase 6: Adaptive Engine
+- **New:** `src/analysis/microstructure.rs` — Vol/Corr/Liquidity regime classification
+- **New:** `src/analysis/multi_horizon.rs` — Swing/Position/Trend scoring with softmax weights
+- **New:** `src/analysis/adaptive.rs` — Strategy weight selection (affinity x regime x vol)
+- **New:** `src/analysis/param_tuner.rs` — Coordinate descent calibration with guardrails
+- **New:** `src/analysis/bayesian_weights.rs` — Beta distribution strategy beliefs with decay
+- **New:** `src/analysis/attribution.rs` — Brinson-Fachler performance decomposition
+- **New:** `ghost-alpha attribution` command — performance breakdown by selection/timing/sizing/strategy
+- **New:** `ghost-alpha calibrate` command — adaptive parameter tuning with --dry-run and --reset
+
+### Phase 5.5: Capital Rotation
+- **New:** `src/portfolio/rotation.rs` — SPS (sell pressure), CDS (deployment), US (upgrade) scores
+- **New:** `ghost-alpha rotate` command — 8-position sell pressure analysis with CDS
+- Anti-churn safeguards: 10-session hold, 2 swaps/week max, 20-session cooldown
+- Tier-adjusted thresholds: A+ wider room (SPS 55), B shorter leash (SPS 40)
+
+### Phase 5: Quantitative Rigor
+- **Fixed:** Volume score bias — z=0 now scores 0, not 15 (was inflating all composites by ~15%)
+- **Fixed:** Screener conditions normalization — all 4 screeners now score to 100% of their criteria
+- **Fixed:** Sentiment weight redistribution — dead weight (article_count=0) redirected to tech/volume
+- **Fixed:** Sharpe ratio methodology — uses horizon-adjusted annualization for overlapping returns
+- **Fixed:** Selling programme pace cap — combined multiplier clamped to [0.25, 4.0]
+- **New:** `src/portfolio/sizing.rs` — 4 methods (VolatilityTarget, EqualWeight, HalfKelly, FixedFractional)
+- **New:** `src/tax/wash_sale.rs` — 30-day wash sale detection (buy + sell side)
+- **New:** `src/analysis/ensemble.rs` — Multi-strategy consensus scoring
+- **New:** `ghost-alpha size` command — position sizing recommendations
+- Added liquidity-adjusted slippage model (1x-5x by LiquidityClass)
+- Added data quality validation (>50% daily move detection, split heuristic)
+- Added regime transition hysteresis (3-day confirmation before regime change)
+- Transaction costs now deducted from backtest forward returns
+
+### Phase 8: Institutional Techniques (Wave 1)
+- **New:** `src/portfolio/vol_target.rs` — Portfolio-level volatility targeting
+- **New:** `ghost-alpha vol-target` command — exposure scaling recommendations
+
+### Improvements
+- **Fixed:** Stored XSS vulnerability in watchlist notes (now html_escape'd)
+- **Fixed:** AlpacaClient headers panic on invalid API key characters (returns Result)
+- **Fixed:** MCP server serde_json unwrap in write_response (returns io::Error)
+- **Fixed:** param_tuner get/set no longer panic on out-of-bounds index
+- **Fixed:** All clippy warnings resolved across lib + test targets
+- **New:** `--fixed-weights` global CLI flag to disable adaptive engine
+- **New:** Rotation and sizing dashboard tabs in web UI
+- **New:** `[adaptive]` and `[broker]` sections in config.example.toml
+- **Updated:** ARCHITECTURE.md — complete rewrite with Mermaid diagrams for 102 source files
+- **New:** docs/TUTORIAL.md — 13-section tutorial covering all commands
+- **New:** CHANGELOG.md — this file
+- Added .venv to .gitignore
+- Wired size/rotate CLI to read from SQLite when available (demo fallback)
+
+## [1.2] — 2026-03
+
+### Phase 4: Validation & Polish
+- Walk-forward backtesting with Monte Carlo confidence intervals
+- HTML backtest reports
+- MCP server for AI agent integration (JSON-RPC 2.0 over stdio)
+- Plugin registry (BYOA providers, screeners, channels)
+- Discord webhook alerts
+- Performance optimization (LTO, stripped binary ~6MB)
+
+### Phase 3: Sentiment
+- ONNX Runtime + FinBERT integration (feature-gated)
+- News fetcher with time-decay aggregation
+- Sentiment -> composite pipeline
+
+### Phase 2.5: Signal Quality
+- Weighted multi-timeframe RS (40/20/20/20)
+- Regime-adaptive scoring weights (55/30/15 Bull, 60/20/20 Sideways, 70/10/20 Bear)
+- ATR, risk-reward ratio, liquidity classification
+- VCP detection, base pattern analysis
+- Macro risk indicators (VIX, credit spreads, yield curve via FRED)
+- Correlation alerting, conviction decay monitoring
+
+### Phase 2: Alerts & Persistence
+- SQLite storage (7 migrations)
+- Telegram bot integration
+- Alert engine with dedup (7-day cooldown)
+- Exit signals (Stage 2 breakdown, RS deterioration, MA death cross)
+- Flagged stock watchlist
+
+### Phase 1: Core Engine
+- Minervini 8-point trend template
+- Volume Z-score anomaly detection
+- Relative strength percentile ranking
+- ADX trend strength
+- Composite scoring (0-100)
+- CLI interface (screen, regime, alerts)
+- TOML configuration
+- Finnhub + Yahoo data providers
+- Sample data provider (50 bundled tickers)

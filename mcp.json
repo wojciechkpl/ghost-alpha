@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ghost-alpha": {
+      "command": "ghost-alpha-mcp",
+      "args": ["--env-only"],
+      "env": {
+        "GHOST_ALPHA_FINNHUB_API_KEY": "${GHOST_ALPHA_FINNHUB_API_KEY}",
+        "GHOST_ALPHA_DB_PATH": "${GHOST_ALPHA_DB_PATH:-ghost_alpha.db}",
+        "GHOST_ALPHA_LOG_LEVEL": "warn"
+      }
+    }
+  }
+}

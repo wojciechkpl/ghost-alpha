@@ -1,0 +1,2 @@
+  Diversification report written to: docs/demos/sample-report.html
+  Open in browser: file://docs/demos/sample-report.html

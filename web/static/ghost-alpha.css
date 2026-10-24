@@ -1,0 +1,222 @@
+/* Ghost Alpha — Dashboard Custom Styles */
+
+:root {
+  --pico-font-size: 14px;
+  --ga-green: #51cf66;
+  --ga-red: #e03131;
+  --ga-orange: #fd7e14;
+  --ga-yellow: #ffd43b;
+  --ga-blue: #74c0fc;
+  --ga-teal: #20c997;
+  --ga-dark: #1a1b26;
+}
+
+/* ── Navigation ───────────────────────────────────────────────────────────── */
+
+nav a { margin-right: 1rem; text-decoration: none; }
+nav a.active { font-weight: bold; text-decoration: underline; }
+nav .brand { font-weight: bold; margin-right: 1.5rem; }
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.badge-critical { background: var(--ga-red); color: #fff; }
+.badge-warning  { background: var(--ga-yellow); color: #000; }
+.badge-info     { background: var(--ga-blue); color: #000; }
+
+.badge-bull     { background: var(--ga-green); color: #fff; }
+.badge-bear     { background: var(--ga-red); color: #fff; }
+.badge-sideways { background: var(--ga-yellow); color: #000; }
+
+/* ── Grade Badges ─────────────────────────────────────────────────────────── */
+
+.grade-aplus { background: #2b8a3e; color: #fff; }
+.grade-a     { background: var(--ga-green); color: #fff; }
+.grade-b     { background: var(--ga-teal); color: #fff; }
+.grade-c     { background: var(--ga-yellow); color: #000; }
+.grade-d     { background: var(--ga-orange); color: #fff; }
+.grade-f     { background: var(--ga-red); color: #fff; }
+
+/* ── Status Indicators ────────────────────────────────────────────────────── */
+
+.pass { color: var(--ga-green); font-weight: bold; }
+.fail { color: var(--ga-red); font-weight: bold; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+table th[data-sort] { cursor: pointer; user-select: none; }
+table th[data-sort]:hover { text-decoration: underline; }
+
+.empty-state {
+  color: #888;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* ── Score bar ────────────────────────────────────────────────────────────── */
+
+.score-bar {
+  display: inline-block;
+  height: 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+/* ── Filter bar ───────────────────────────────────────────────────────────── */
+
+.filter-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filter-bar label { margin-bottom: 0; }
+.filter-bar select,
+.filter-bar input { margin-bottom: 0; }
+
+/* ── Flagged stocks ───────────────────────────────────────────────────────── */
+
+.status-active  { color: var(--ga-green); font-weight: bold; }
+.status-exited  { color: var(--ga-red); }
+.status-expired { color: #888; }
+
+/* ── SVG charts ───────────────────────────────────────────────────────────── */
+
+.chart-container { margin: 1rem 0; overflow-x: auto; }
+.chart-container svg { max-width: 100%; height: auto; }
+
+/* ── Heatmap ─────────────────────────────────────────────────────────────── */
+
+.heatmap-container { overflow-x: auto; margin: 1rem 0; }
+.heatmap-container svg { min-width: 500px; }
+.heatmap-legend { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.85em; }
+
+/* ── Gauge panel ─────────────────────────────────────────────────────────── */
+
+.gauge-panel { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; margin: 1.5rem 0; }
+.gauge-item { text-align: center; }
+.gauge-item svg { display: block; margin: 0 auto; }
+.gauge-label { font-size: 0.85em; color: #868e96; margin-top: 0.25rem; }
+
+/* ── Portfolio & Dashboard ────────────────────────────────────────────────── */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.dashboard-card {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.dashboard-card h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.stat-label { color: #868e96; font-size: 0.9em; }
+.stat-value { font-weight: 600; }
+
+.pl-positive { color: var(--ga-green); }
+.pl-negative { color: var(--ga-red); }
+.pl-zero { color: #868e96; }
+
+/* ── Correlation Matrix ──────────────────────────────────────────────────── */
+
+.matrix-container {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.matrix-container svg {
+  min-width: 400px;
+}
+
+.corr-legend {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.5rem;
+  font-size: 0.85em;
+}
+
+.corr-legend .swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* ── Efficient Frontier ──────────────────────────────────────────────────── */
+
+.frontier-container {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+/* ── Fan Chart (Monte Carlo) ─────────────────────────────────────────────── */
+
+.fan-chart-container {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+/* ── Timeline (Selling Programme) ────────────────────────────────────────── */
+
+.timeline-container {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+}
+
+/* ── Donut Chart ─────────────────────────────────────────────────────────── */
+
+.donut-container {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+/* ── Nav wrapping for many links ─────────────────────────────────────────── */
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .filter-bar { flex-direction: column; }
+  nav a { margin-right: 0.5rem; font-size: 0.9em; }
+  .gauge-panel { gap: 0.75rem; }
+  .gauge-item svg { width: 90px; height: 90px; }
+}

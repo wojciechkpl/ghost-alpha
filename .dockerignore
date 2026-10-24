@@ -1,0 +1,14 @@
+target/
+.git/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+docs/
+demo/
+benches/
+tests/
+scripts/
+config.toml
+*.md

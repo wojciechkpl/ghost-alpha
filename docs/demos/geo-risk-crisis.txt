@@ -1,0 +1,21 @@
+
+  Geopolitical Risk Assessment
+  ──────────────────────────────────────────────────
+  Oil (Brent):  $140/bbl  → 2.14/2.5
+  VIX:          38.0       → 1.80/2.5
+  Gold 3m:      20.0%      → 1.88/2.5
+  DXY 3m:       -8.0%      → 2.00/2.5
+  ──────────────────────────────────────────────────
+  Composite: 7.8/10 — Extreme
+
+  Suggested adjustments:
+    energy               +10%
+    defense              +5%
+    cash                 +10%
+    bonds                +5%
+    em                   -6%
+    growth               -6%
+    intl_developed       -4%
+    small_cap            -4%
+    alternatives         -3%
+

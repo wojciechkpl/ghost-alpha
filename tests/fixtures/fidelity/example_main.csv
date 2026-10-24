@@ -1,0 +1,14 @@
+﻿Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type,
+EX0000001,Individual,FCASH**,HELD IN FCASH,,,,$250.00,,,,,0.03%,,,Cash,
+EX0000001,Individual,AAPL,APPLE INC,200,$250.00,+$0.00,$50000.00,+$0.00,+0.00%,+$18000.00,+56.25%,5.27%,$32000.00,$160.00,Cash,
+EX0000001,Individual,MSFT,MICROSOFT CORP,1300,$420.00,+$0.00,$546000.00,+$0.00,+0.00%,+$305500.00,+127.03%,57.58%,$240500.00,$185.00,Cash,
+EX0000001,Individual,IEF,ISHARES 7-10 YEAR TREASURY BOND ETF,600,$95.00,+$0.00,$57000.00,+$0.00,+0.00%,-$1800.00,-3.06%,6.01%,$58800.00,$98.00,Cash,
+EX0000001,Individual,SPAXX,FIDELITY GOVERNMENT MONEY MARKET,40000,$1.00,$0.00,$40000.00,--,--,--,--,4.22%,--,--,Cash,
+EX0000001,Individual,VOO,VANGUARD S&P 500 ETF,250,$600.00,+$0.00,$150000.00,+$0.00,+0.00%,+$45000.00,+42.86%,15.82%,$105000.00,$420.00,Cash,
+EX0000001,Individual,VXUS,VANGUARD TOTAL INTL STOCK ETF,1500,$70.00,+$0.00,$105000.00,+$0.00,+0.00%,+$18000.00,+20.69%,11.07%,$87000.00,$58.00,Cash,
+
+"The data and information in this spreadsheet is provided to you solely for your use ..."
+
+"Brokerage services are provided by Fidelity Brokerage Services LLC ..."
+
+"Date downloaded May-01-2026 4:00 p.m ET"

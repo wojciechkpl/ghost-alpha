@@ -1,0 +1,173 @@
+pub mod assets;
+pub mod charts;
+pub mod dashboard_routes;
+pub mod diversification_report;
+pub mod quarterly_report;
+pub mod routes;
+
+use std::sync::Arc;
+
+use axum::Router;
+use tower_http::cors::CorsLayer;
+
+use crate::config::AppConfig;
+use crate::storage::db::SqliteRepository;
+
+/// Shared state injected into every route handler.
+#[derive(Clone)]
+pub struct AppState {
+    pub repo: Arc<SqliteRepository>,
+    pub config: Arc<AppConfig>,
+}
+
+/// Build the Axum router with all dashboard routes and CORS middleware.
+pub fn create_router(state: AppState) -> Router {
+    Router::new()
+        // Full pages
+        .route("/", axum::routing::get(routes::home))
+        .route("/alerts", axum::routing::get(routes::alerts_page))
+        .route("/watchlist", axum::routing::get(routes::watchlist_page))
+        .route("/regime", axum::routing::get(routes::regime_page))
+        .route("/flagged", axum::routing::get(routes::flagged_page))
+        .route("/analytics", axum::routing::get(routes::analytics_page))
+        .route("/strategies", axum::routing::get(routes::strategies_page))
+        .route("/settings", axum::routing::get(routes::settings_page))
+        // Dashboard pages (diversification advisory)
+        .route(
+            "/portfolio",
+            axum::routing::get(dashboard_routes::portfolio_page),
+        )
+        .route(
+            "/correlation",
+            axum::routing::get(dashboard_routes::correlation_page),
+        )
+        .route(
+            "/valuation",
+            axum::routing::get(dashboard_routes::valuation_page),
+        )
+        .route("/tax", axum::routing::get(dashboard_routes::tax_page))
+        .route(
+            "/optimize",
+            axum::routing::get(dashboard_routes::optimize_page),
+        )
+        .route("/etf", axum::routing::get(dashboard_routes::etf_page))
+        .route(
+            "/selling",
+            axum::routing::get(dashboard_routes::selling_page),
+        )
+        .route(
+            "/decisions",
+            axum::routing::get(dashboard_routes::decisions_page),
+        )
+        .route(
+            "/fundamentals",
+            axum::routing::get(dashboard_routes::fundamentals_page),
+        )
+        .route(
+            "/concentration-decay",
+            axum::routing::get(dashboard_routes::concentration_decay_page),
+        )
+        .route(
+            "/allocation",
+            axum::routing::get(dashboard_routes::allocation_page),
+        )
+        .route(
+            "/geo-risk",
+            axum::routing::get(dashboard_routes::geo_risk_page),
+        )
+        .route(
+            "/rotation",
+            axum::routing::get(dashboard_routes::rotation_page),
+        )
+        .route("/sizing", axum::routing::get(dashboard_routes::sizing_page))
+        // htmx partial endpoints (fragments only)
+        .route(
+            "/partials/screen-table",
+            axum::routing::get(routes::screen_table_partial),
+        )
+        .route(
+            "/partials/alert-list",
+            axum::routing::get(routes::alert_list_partial),
+        )
+        .route(
+            "/partials/watchlist-rows",
+            axum::routing::get(routes::watchlist_rows_partial),
+        )
+        .route(
+            "/partials/regime-strip",
+            axum::routing::get(routes::regime_strip_partial),
+        )
+        .route(
+            "/partials/score-heatmap",
+            axum::routing::get(routes::score_heatmap_partial),
+        )
+        .route(
+            "/partials/sentiment-heatmap",
+            axum::routing::get(routes::sentiment_heatmap_partial),
+        )
+        .route(
+            "/partials/grade-dist",
+            axum::routing::get(routes::grade_dist_partial),
+        )
+        .route(
+            "/partials/rs-scatter",
+            axum::routing::get(routes::rs_scatter_partial),
+        )
+        .route(
+            "/partials/alert-calendar",
+            axum::routing::get(routes::alert_calendar_partial),
+        )
+        .route(
+            "/partials/regime-history",
+            axum::routing::get(routes::regime_history_partial),
+        )
+        .route(
+            "/partials/macro-gauges",
+            axum::routing::get(routes::macro_gauges_partial),
+        )
+        // Watchlist mutations (return fragments)
+        .route("/watchlist/add", axum::routing::post(routes::watchlist_add))
+        .route(
+            "/watchlist/remove",
+            axum::routing::post(routes::watchlist_remove),
+        )
+        // Embedded static assets
+        .route("/static/*path", axum::routing::get(assets::static_handler))
+        .layer(CorsLayer::permissive())
+        .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{AlertsConfig, FinnhubConfig, PluginsConfig, StorageConfig};
+
+    pub(crate) fn make_state() -> AppState {
+        let repo =
+            SqliteRepository::open_in_memory().expect("in-memory DB should open without error");
+        let config = AppConfig {
+            finnhub: FinnhubConfig::default(),
+            telegram: None,
+            discord: None,
+            fred: None,
+            sentiment: None,
+            backtest: None,
+            alerts: AlertsConfig::default(),
+            storage: StorageConfig::default(),
+            plugins: PluginsConfig::default(),
+            cache: Default::default(),
+            universe: Vec::new(),
+        };
+        AppState {
+            repo: Arc::new(repo),
+            config: Arc::new(config),
+        }
+    }
+
+    #[test]
+    fn router_creation_does_not_panic() {
+        let state = make_state();
+        // create_router must not panic — if it does the test fails
+        let _router = create_router(state);
+    }
+}

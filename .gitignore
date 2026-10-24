@@ -1,0 +1,68 @@
+/target
+
+# Environment files (contain secrets)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Config files that may contain API keys
+config.toml
+config.*.toml
+!config.example.toml
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secret/key files
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Screencast recordings
+demo/
+*.cast
+!docs/demo.cast
+*.gif
+
+# Test artifacts
+test-results/
+e2e_test.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python virtual environments
+.venv/
+__pycache__/
+
+# Logs
+*.log
+logs/
+
+# Profiling / benchmarks
+profiling/
+criterion/
+*.flamegraph
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.claude/
+
+# User portfolio data — never commit (see docs/PLAN_PIPELINE.md)
+my_data/
+plan_output/
+*Portfolio_Positions*.csv
+*Vesting_Schedule*
+*vesting*.csv
+**/positions/*.csv
+!tests/fixtures/vesting/sample.csv
+reports/

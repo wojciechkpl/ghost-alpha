@@ -1,0 +1,29 @@
+{
+  "name": "ghostalpha",
+  "version": "1.0.0",
+  "description": "**Minervini-based market intelligence agent** — screens S&P 500 stocks daily, scores them with a composite of technical, volume, and sentiment signals, and routes ranked alerts to Telegram, Discord, or any webhook.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wojciechkpl/ghost-alpha.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/wojciechkpl/ghost-alpha/issues"
+  },
+  "homepage": "https://github.com/wojciechkpl/ghost-alpha#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "tsx": "^4.21.0"
+  }
+}

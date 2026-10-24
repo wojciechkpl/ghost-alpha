@@ -1,0 +1,37 @@
+# GhostAlpha — Goose Extension Configuration
+#
+# Add this to your Goose settings or copy the relevant fields.
+#
+# Option 1: Add via Goose CLI
+#   goose configure extensions
+#
+# Option 2: Add manually to ~/.config/goose/profiles.yaml
+#   extensions:
+#     ghost-alpha:
+#       type: stdio
+#       command: ghost-alpha-mcp
+#       args: ["--env-only"]
+#       env:
+#         GHOST_ALPHA_FINNHUB_API_KEY: "your-key-here"
+
+name: ghost-alpha
+display_name: GhostAlpha Stock Screener
+description: >
+  Minervini-based stock screening and scoring engine.
+  Screen stocks through the 8-point trend template,
+  analyze composite scores, and discover high-growth opportunities.
+type: stdio
+command: ghost-alpha-mcp
+args:
+  - "--env-only"
+env:
+  GHOST_ALPHA_FINNHUB_API_KEY: ""
+  GHOST_ALPHA_DB_PATH: "ghost_alpha.db"
+  GHOST_ALPHA_LOG_LEVEL: "warn"
+
+# Available tools:
+#   - screen_stock      Screen a single stock through Minervini filter
+#   - score_breakdown   What-if analysis with hypothetical indicators
+#   - get_config        View masked server configuration
+#   - list_providers    List registered plugins and active selections
+#   - health_check      Server health and connectivity status

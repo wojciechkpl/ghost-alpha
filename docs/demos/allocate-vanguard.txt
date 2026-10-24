@@ -1,0 +1,17 @@
+
+  Target Allocation — Moderate profile on Vanguard (example)
+  ────────────────────────────────────────────────────────────────────────────────
+  Balanced growth and income. Suited for 5-10 year horizon. $100K example.
+
+           Asset Class  Ticker                       Fund Name       ER        Amount     TLH
+  ────────────────────────────────────────────────────────────────────────────────
+       US Broad Market     VTI  Vanguard Total Stock Market ETF   0.030%        $25000    ITOT
+          US Large Cap     VOO            Vanguard S&P 500 ETF   0.030%        $10000     IVV
+        Intl Developed    VXUS   Vanguard Total Intl Stock ETF   0.070%        $10000       —
+         Intl Emerging     VWO  Vanguard FTSE Emerging Markets   0.080%         $5000       —
+              US Bonds     BND  Vanguard Total Bond Market ETF   0.030%        $25000     AGG
+           Real Estate     VNQ        Vanguard Real Estate ETF   0.120%        $10000       —
+          US Small Cap      VB          Vanguard Small-Cap ETF   0.050%         $5000       —
+  ────────────────────────────────────────────────────────────────────────────────
+  Blended expense ratio: 0.0483%
+

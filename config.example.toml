@@ -1,0 +1,124 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GhostAlpha Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is OPTIONAL. You can get started without it:
+#   ghost-alpha demo     — run with bundled sample data, no API key needed
+#   ghost-alpha setup    — interactive wizard that generates config.toml for you
+#
+# For manual setup, copy to config.toml and fill in your values.
+# All sensitive values can be overridden via GHOST_ALPHA_* environment variables.
+# A .env file is auto-loaded if present (via dotenvy).
+#
+# Usage: cp config.example.toml config.toml
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Data Provider ────────────────────────────────────────────────────────────
+
+[finnhub]
+# Your Finnhub API key (or set GHOST_ALPHA_FINNHUB_API_KEY env var)
+# SECURITY: Prefer env var over hardcoding here
+api_key = ""
+# Free tier: 60 RPM, Premium: 300 RPM
+requests_per_minute = 60
+# Seconds between retries on rate limit / transient errors
+retry_delay_secs = 5
+
+# ── Data Provider — Yahoo Finance (Alternative, no API key needed) ──────────
+# Use --provider yahoo on the CLI, or set active_provider below.
+# Yahoo is unofficial and rate-limited to ~5 req/sec.
+# [yahoo]
+# rate_limit_per_sec = 5
+
+# ── Alerts — Telegram (Optional) ─────────────────────────────────────────────
+# Uncomment and fill in to enable Telegram alerts.
+# Or set GHOST_ALPHA_TELEGRAM_BOT_TOKEN and GHOST_ALPHA_TELEGRAM_CHAT_ID env vars.
+
+# [telegram]
+# bot_token = ""
+# chat_id = ""
+
+# ── Alerts — Discord (Optional) ──────────────────────────────────────────────
+# Uncomment to enable Discord webhook alerts.
+# Or set GHOST_ALPHA_DISCORD_WEBHOOK_URL env var.
+
+# [discord]
+# webhook_url = ""
+
+# ── Alert Thresholds ─────────────────────────────────────────────────────────
+
+[alerts]
+critical_score_threshold = 90.0
+warning_score_threshold  = 70.0
+info_score_threshold     = 50.0
+volume_spike_threshold   = 2.0
+dedup_cooldown_days      = 7
+max_daily_alerts         = 50
+quiet_start_hour         = 22
+quiet_end_hour           = 7
+sector_concentration_threshold = 3
+# CLI output format: --format json | csv | jsonl | html (default: table)
+# format = "table"
+
+# ── Storage ──────────────────────────────────────────────────────────────────
+
+[storage]
+# SQLite database path (or set GHOST_ALPHA_DB_PATH env var)
+db_path = "ghost_alpha.db"
+
+# ── Plugins / BYOA (Bring Your Own Agent) ────────────────────────────────────
+# Configure which registered implementations to use, and add custom webhook
+# alert channels for any agent or service to receive alerts.
+
+[plugins]
+# Available providers: "finnhub" (default), "yahoo" (no API key), "sample" (bundled demo)
+active_provider = "finnhub"
+# Available screeners: "minervini" (default), "breakout", "mean-reversion", "trend-strength"
+active_screener = "minervini"
+
+# ── Custom Webhook Channels ──────────────────────────────────────────────────
+# Add as many [[plugins.webhooks]] blocks as you need. Each becomes an alert
+# channel that receives POST requests with JSON payloads.
+# Or set GHOST_ALPHA_WEBHOOK_URL env var for a single webhook.
+
+# [[plugins.webhooks]]
+# url = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+# auth_header = "Bearer your-token"
+# headers = ["Content-Type=application/json", "X-Custom-Header=value"]
+
+# [[plugins.webhooks]]
+# url = "https://your-custom-endpoint.com/alerts"
+
+# ── Universe Override (Optional) ─────────────────────────────────────────────
+# If empty, fetches S&P 500 constituents from Finnhub.
+# Uncomment to override with specific tickers:
+
+# universe = ["NVDA", "AMD", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA"]
+
+# ── Web Dashboard (Optional) ───────────────────────────────────────────────
+# Start with: ghost-alpha serve
+# [web]
+# port = 3000
+# bind = "127.0.0.1"
+
+# ── Adaptive Engine (Phase 6) ─────────────────────────────────────────────
+# Controls the self-calibrating strategy selection and parameter tuning.
+# Disable with --fixed-weights CLI flag for comparison.
+
+# [adaptive]
+# enabled = true                    # Master switch for adaptive engine
+# blend_factor = 0.4               # Bayesian blend (0=prior only, 1=Bayesian only)
+# softmax_temperature = 1.0        # Timeframe weight concentration (0.5=aggressive, 2.0=equal)
+# calibration_window_days = 252    # Rolling calibration lookback
+# min_signals_for_calibration = 20 # Cold start protection
+# decay_factor = 0.995             # Bayesian evidence decay per observation (~138 obs half-life)
+# param_tuning_enabled = true      # Separate toggle for parameter adaptation
+# reset_on_regime_change = true    # Reset beliefs when regime transitions confirm
+# hysteresis_days = 3              # Regime transition confirmation window
+
+# ── Broker Integration (Phase 7) ──────────────────────────────────────────
+# For paper/live trade execution via Alpaca.
+# Set credentials via env vars: ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY
+
+# [broker]
+# default_mode = "dry-run"         # dry-run, paper, or live
+# confirm_live_trades = true       # Require interactive confirmation for live trades

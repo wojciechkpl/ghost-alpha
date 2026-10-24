@@ -1,0 +1,99 @@
+{
+  "t0": "2026-05-01",
+  "horizon_years": 5,
+  "mode": "mc",
+  "total_nav_t0": 1043770.0,
+  "amzn_price_t0": 420.0,
+  "amzn_shares_t0": 1300.0,
+  "rsu_total_gross_shares": 420.0,
+  "rsu_total_net_shares": 327.6,
+  "rsu_first_vest": "2026-05-15",
+  "rsu_last_vest": "2028-03-01",
+  "withhold_rate": 0.22,
+  "asset_class_returns": {
+    "us_large_cap_index": 0.085,
+    "us_total_market": 0.08,
+    "us_quality_factor": 0.085,
+    "us_blue_chip_growth": 0.09,
+    "tech_mega_cap": 0.1,
+    "consumer_mega_cap": 0.09,
+    "international_developed": 0.07,
+    "emerging_asia": 0.08,
+    "energy_sector": 0.06,
+    "aerospace_defense": 0.09,
+    "industrial": 0.08,
+    "cash_mmf": 0.04,
+    "us_treasury_intermediate": 0.045,
+    "us_treasury_long": 0.05,
+    "us_tips": 0.04,
+    "gold": 0.05,
+    "managed_futures": 0.06,
+    "intl_developed_etf": 0.07,
+    "emerging_markets_etf": 0.08
+  },
+  "scenario_deltas": {
+    "bear": -0.5,
+    "base": 0.0,
+    "bull": 0.5
+  },
+  "mc": {
+    "n_paths": 5000,
+    "seed": 42,
+    "representative_scenario_id": "mc_315",
+    "year5_nav_percentiles": {
+      "HOLD": {
+        "p05": 757949.0,
+        "p25": 1134857.94,
+        "p50": 1565343.82,
+        "p75": 2162732.03,
+        "p95": 3686126.28,
+        "mean": 1805475.95
+      },
+      "SELL_REINVEST": {
+        "p05": 801564.73,
+        "p25": 1167716.84,
+        "p50": 1572227.65,
+        "p75": 2123341.82,
+        "p95": 3522099.89,
+        "mean": 1787200.77
+      },
+      "OPTION_B_UNWIND": {
+        "p05": 890972.07,
+        "p25": 1216005.14,
+        "p50": 1539680.38,
+        "p75": 1961907.18,
+        "p95": 2906291.48,
+        "mean": 1670327.88
+      }
+    },
+    "year5_amzn_pct_percentiles": {
+      "HOLD": {
+        "p05": 39.1,
+        "p25": 49.98,
+        "p50": 56.94,
+        "p75": 63.42,
+        "p95": 71.13
+      },
+      "SELL_REINVEST": {
+        "p05": 29.19,
+        "p25": 38.68,
+        "p50": 45.22,
+        "p75": 51.7,
+        "p95": 59.92
+      },
+      "OPTION_B_UNWIND": {
+        "p05": 15.1,
+        "p25": 20.58,
+        "p50": 24.87,
+        "p75": 29.61,
+        "p95": 36.79
+      }
+    }
+  },
+  "input_hashes": {
+    "positions.csv": "a94f2a6cdd1844b5",
+    "allocations.csv": "3f1a34b52367e24e",
+    "rsu_vesting.csv": "f2138f4a111fab9c"
+  },
+  "script_hash": "d54394ccaf89e5e9"
+}

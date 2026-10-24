@@ -1,0 +1,11 @@
+﻿Account Number,Account Name,Symbol,Description,Quantity,Last Price,Last Price Change,Current Value,Today's Gain/Loss Dollar,Today's Gain/Loss Percent,Total Gain/Loss Dollar,Total Gain/Loss Percent,Percent Of Account,Cost Basis Total,Average Cost Basis,Type,
+EX0000002,Joint WROS,FCASH**,HELD IN FCASH,,,,$120.00,,,,,0.13%,,,Cash,
+EX0000002,Joint WROS,IAU,ISHARES GOLD TRUST,500,$60.00,+$0.00,$30000.00,+$0.00,+0.00%,+$10000.00,+50.00%,31.41%,$20000.00,$40.00,Cash,
+EX0000002,Joint WROS,NVDA,NVIDIA CORPORATION COM,150,$180.00,+$0.00,$27000.00,+$0.00,+0.00%,+$13500.00,+100.00%,28.27%,$13500.00,$90.00,Cash,
+EX0000002,Joint WROS,VWO,VANGUARD FTSE EMERGING MARKETS ETF,800,$48.00,+$0.00,$38400.00,+$0.00,+0.00%,+$3200.00,+9.09%,40.20%,$35200.00,$44.00,Cash,
+
+"The data and information in this spreadsheet is provided to you solely for your use ..."
+
+"Brokerage services are provided by Fidelity Brokerage Services LLC ..."
+
+"Date downloaded May-01-2026 4:00 p.m ET"

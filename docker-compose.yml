@@ -1,0 +1,19 @@
+services:
+  ghost-alpha:
+    image: ghcr.io/${GITHUB_REPOSITORY:-user/ghost-alpha}:latest
+    environment:
+      - GHOST_ALPHA_FINNHUB_API_KEY=${FINNHUB_API_KEY}
+      - GHOST_ALPHA_TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - GHOST_ALPHA_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - GHOST_ALPHA_DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - GHOST_ALPHA_DB_PATH=/data/ghost_alpha.db
+    volumes:
+      - ghost-alpha-data:/data
+    # Default command: screen top-20 candidates.
+    # Override per-run: docker compose run ghost-alpha screen --top 10
+    command: ["screen", "--top", "20"]
+    # To schedule daily execution, trigger from cron or a systemd timer:
+    #   0 18 * * 1-5  docker compose -f /path/to/docker-compose.yml run --rm ghost-alpha
+
+volumes:
+  ghost-alpha-data:

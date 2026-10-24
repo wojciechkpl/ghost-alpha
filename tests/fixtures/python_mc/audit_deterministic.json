@@ -1,0 +1,67 @@
+{
+  "t0": "2026-05-01",
+  "horizon_years": 5,
+  "mode": "deterministic",
+  "total_nav_t0": 1043770.0,
+  "amzn_price_t0": 420.0,
+  "amzn_shares_t0": 1300.0,
+  "rsu_total_gross_shares": 420.0,
+  "rsu_total_net_shares": 327.6,
+  "rsu_first_vest": "2026-05-15",
+  "rsu_last_vest": "2028-03-01",
+  "withhold_rate": 0.22,
+  "asset_class_returns": {
+    "us_large_cap_index": 0.085,
+    "us_total_market": 0.08,
+    "us_quality_factor": 0.085,
+    "us_blue_chip_growth": 0.09,
+    "tech_mega_cap": 0.1,
+    "consumer_mega_cap": 0.09,
+    "international_developed": 0.07,
+    "emerging_asia": 0.08,
+    "energy_sector": 0.06,
+    "aerospace_defense": 0.09,
+    "industrial": 0.08,
+    "cash_mmf": 0.04,
+    "us_treasury_intermediate": 0.045,
+    "us_treasury_long": 0.05,
+    "us_tips": 0.04,
+    "gold": 0.05,
+    "managed_futures": 0.06,
+    "intl_developed_etf": 0.07,
+    "emerging_markets_etf": 0.08
+  },
+  "scenario_deltas": {
+    "bear": -0.5,
+    "base": 0.0,
+    "bull": 0.5
+  },
+  "year5_nav": {
+    "bear-HOLD": 972606.4,
+    "bear-SELL_REINVEST": 996075.26,
+    "bear-OPTION_B_UNWIND": 1015195.02,
+    "base-HOLD": 1812616.75,
+    "base-SELL_REINVEST": 1792575.3,
+    "base-OPTION_B_UNWIND": 1678866.68,
+    "bull-HOLD": 3240248.48,
+    "bull-SELL_REINVEST": 3125619.57,
+    "bull-OPTION_B_UNWIND": 2692796.06
+  },
+  "year5_amzn_pct": {
+    "bear-HOLD": 51.58,
+    "bear-SELL_REINVEST": 40.23,
+    "bear-OPTION_B_UNWIND": 22.14,
+    "base-HOLD": 60.74,
+    "base-SELL_REINVEST": 49.05,
+    "base-OPTION_B_UNWIND": 26.48,
+    "bull-HOLD": 67.0,
+    "bull-SELL_REINVEST": 55.48,
+    "bull-OPTION_B_UNWIND": 30.0
+  },
+  "input_hashes": {
+    "positions.csv": "a94f2a6cdd1844b5",
+    "allocations.csv": "3f1a34b52367e24e",
+    "rsu_vesting.csv": "f2138f4a111fab9c"
+  },
+  "script_hash": "d54394ccaf89e5e9"
+}

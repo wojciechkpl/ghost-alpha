@@ -1,0 +1,17 @@
+
+  Target Allocation — Aggressive profile on Fidelity (example)
+  ────────────────────────────────────────────────────────────────────────────────
+  High growth, minimal bonds. Suited for 10+ year horizon. $100K example.
+
+           Asset Class  Ticker                       Fund Name       ER        Amount     TLH
+  ────────────────────────────────────────────────────────────────────────────────
+       US Broad Market   FZROX      Fidelity ZERO Total Market   0.000%        $30000   FSKAX
+          US Small Cap   FSSNX        Fidelity Small Cap Index   0.025%        $10000       —
+        Intl Developed   FZILX        Fidelity ZERO Intl Index   0.000%        $15000   FTIHX
+         Intl Emerging   FPADX  Fidelity Emerging Markets Index   0.075%        $10000       —
+              US Bonds   FXNAX          Fidelity US Bond Index   0.025%         $5000       —
+           Real Estate    FREL   Fidelity MSCI Real Estate ETF   0.084%        $10000       —
+          US Large Cap   FNILX         Fidelity ZERO Large Cap   0.000%        $15000   FXAIX
+  ────────────────────────────────────────────────────────────────────────────────
+  Blended expense ratio: 0.0207%
+
