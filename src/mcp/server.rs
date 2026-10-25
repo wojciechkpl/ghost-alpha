@@ -543,6 +543,7 @@ mod tests {
             plugins: Default::default(),
             cache: Default::default(),
             universe: vec![],
+            edgar: None,
         }
     }
 

@@ -182,6 +182,14 @@ enum Commands {
         #[arg(long, default_value = "plan_output")]
         out_dir: String,
     },
+    /// SEC EDGAR data (free, no API key): point-in-time XBRL facts and filings
+    ///
+    /// Requires a User-Agent: set GHOST_ALPHA_EDGAR_USER_AGENT="<app or name> <contact email>"
+    /// (or `[edgar] user_agent` in config.toml).
+    Edgar {
+        #[command(subcommand)]
+        action: ghost_alpha::cli::edgar::EdgarCommand,
+    },
     /// Create a data folder with example positions, vesting, symbol map and plan.toml for `plan --data-dir`
     InitData {
         /// Directory to create or fill
@@ -237,7 +245,7 @@ enum Commands {
         #[arg(long, default_value = "single")]
         filing: String,
         /// State code (e.g., WA, CA, TX)
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income (salary, etc.)
         #[arg(long, default_value = "0")]
@@ -273,10 +281,10 @@ enum Commands {
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
         /// Filing status: single or mfj
-        #[arg(long, default_value = "mfj")]
+        #[arg(long, default_value = "single")]
         filing: String,
         /// State code (e.g., WA, CA, TX)
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income (salary, etc.)
         #[arg(long, default_value = "0")]
@@ -324,10 +332,10 @@ enum Commands {
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
         /// Filing status: single or mfj
-        #[arg(long, default_value = "mfj")]
+        #[arg(long, default_value = "single")]
         filing: String,
         /// State code
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income
         #[arg(long, default_value = "200000")]
@@ -1673,7 +1681,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // MCP mode logs to stderr (stdout is JSON-RPC channel)
-    let is_mcp = matches!(cli.command, Commands::Mcp { .. });
+    // `edgar --format json` must keep stdout machine-readable, so it logs to stderr too.
+    let log_to_stderr = matches!(cli.command, Commands::Mcp { .. } | Commands::Edgar { .. });
 
     let filter = if cli.verbose {
         EnvFilter::new("ghost_alpha=debug,info")
@@ -1681,7 +1690,7 @@ async fn main() -> Result<()> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
     };
 
-    if is_mcp {
+    if log_to_stderr {
         tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_writer(std::io::stderr)
@@ -1698,6 +1707,12 @@ async fn main() -> Result<()> {
     // plan needs no app config or API key — handle it before config loading.
     if matches!(cli.command, Commands::Plan { .. }) {
         return run_plan_command(cli.command);
+    }
+
+    // edgar needs no app config or API key; only an optional `[edgar] user_agent`.
+    if let Commands::Edgar { action } = cli.command {
+        let config_user_agent = edgar_config_user_agent(&cli.config);
+        return ghost_alpha::cli::edgar::run(action, config_user_agent.as_deref()).await;
     }
 
     // init-data only writes template files — no config needed.
@@ -2004,6 +2019,7 @@ async fn main() -> Result<()> {
         // Handled above via early return before config loading.
         Commands::Demo { .. } => unreachable!("Demo is handled before config load"),
         Commands::InitData { .. } => unreachable!("InitData is handled before config load"),
+        Commands::Edgar { .. } => unreachable!("Edgar is handled before config load"),
         Commands::Serve { port, bind } => {
             run_serve(&cfg, &bind, port).await?;
         }
@@ -2162,6 +2178,38 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// `[edgar] user_agent` from the config file, read without loading (or
+/// validating) the rest of the app config. The dotenv file is loaded first so it
+/// can supply `GHOST_ALPHA_EDGAR_USER_AGENT`. A missing file is fine; an
+/// unreadable or malformed one only produces a warning, since the env var may
+/// be enough.
+fn edgar_config_user_agent(path: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Partial {
+        edgar: Option<ghost_alpha::config::EdgarSettings>,
+    }
+    ghost_alpha::config::load_dotenv();
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            eprintln!(
+                "warning: could not read config file '{path}': {e}; ignoring [edgar] section"
+            );
+            return None;
+        }
+    };
+    match toml::from_str::<Partial>(&text) {
+        Ok(p) => p.edgar.and_then(|e| e.user_agent),
+        Err(e) => {
+            eprintln!(
+                "warning: could not parse config file '{path}': {e}; ignoring [edgar] section"
+            );
+            None
+        }
+    }
 }
 
 /// `ghost-alpha plan`: runs without any app config or API key.

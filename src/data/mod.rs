@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod edgar;
 pub mod etf;
 pub mod fetcher;
 pub mod fred;

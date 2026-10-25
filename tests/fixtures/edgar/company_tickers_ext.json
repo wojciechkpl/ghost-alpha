@@ -1,0 +1,37 @@
+{
+ "0": {
+  "cik_str": 999999,
+  "ticker": "EXMP",
+  "title": "Fictional EXMP"
+ },
+ "1": {
+  "cik_str": 999998,
+  "ticker": "EXMA",
+  "title": "Fictional EXMA"
+ },
+ "2": {
+  "cik_str": 777001,
+  "ticker": "EXM",
+  "title": "Fictional EXM"
+ },
+ "3": {
+  "cik_str": 777002,
+  "ticker": "EX",
+  "title": "Fictional EX"
+ },
+ "4": {
+  "cik_str": 777003,
+  "ticker": "E",
+  "title": "Fictional E"
+ },
+ "5": {
+  "cik_str": 555001,
+  "ticker": "BRK-B",
+  "title": "Fictional BRK-B"
+ },
+ "6": {
+  "cik_str": 555002,
+  "ticker": "BRK-A",
+  "title": "Fictional BRK-A"
+ }
+}

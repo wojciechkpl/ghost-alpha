@@ -23,6 +23,14 @@ requests_per_minute = 60
 # Seconds between retries on rate limit / transient errors
 retry_delay_secs = 5
 
+# ── SEC EDGAR (optional; used by `ghost-alpha edgar ...`) ───────────────────
+# SEC requires every automated client to send a descriptive User-Agent that
+# includes a contact email, in the form "<app or name> <contact email>".
+# Requests without one are blocked. Can also be set with the
+# GHOST_ALPHA_EDGAR_USER_AGENT env var, which takes precedence.
+# [edgar]
+# user_agent = "Jane Doe jane@example.com"
+
 # ── Data Provider — Yahoo Finance (Alternative, no API key needed) ──────────
 # Use --provider yahoo on the CLI, or set active_provider below.
 # Yahoo is unofficial and rate-limited to ~5 req/sec.

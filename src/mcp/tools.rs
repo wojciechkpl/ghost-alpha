@@ -349,6 +349,7 @@ mod tests {
             plugins: Default::default(),
             cache: Default::default(),
             universe: vec![],
+            edgar: None,
         };
         let output = masked_config(&config);
         assert_eq!(output.finnhub_api_key, "sk...89");
@@ -373,6 +374,7 @@ mod tests {
             plugins: Default::default(),
             cache: Default::default(),
             universe: vec![],
+            edgar: None,
         };
         let output = masked_config(&config);
         assert_eq!(output.finnhub_api_key, "****");

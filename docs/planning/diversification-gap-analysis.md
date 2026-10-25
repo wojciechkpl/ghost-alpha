@@ -181,7 +181,7 @@ StockDropPercent(f64), // Emergency: stock drops > N% in a day
 
 ```
 ghost-alpha sell-compare --ticker AMZN --shares 1000 --cost-basis 95 \
-  --price 210 --state WA --filing mfj --other-income 200000 --max-years 5
+  --price 210 --state CA --filing single --other-income 150000 --max-years 5
 ```
 
 ---

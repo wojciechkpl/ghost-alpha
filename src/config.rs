@@ -199,6 +199,20 @@ pub struct FredConfig {
     pub api_key: String,
 }
 
+// ─── SEC EDGAR config ───────────────────────────────────────────────────────
+
+/// `[edgar]` section of config.toml.
+///
+/// SEC requires every automated client to identify itself with a descriptive
+/// `User-Agent` containing a contact email. `GHOST_ALPHA_EDGAR_USER_AGENT`
+/// overrides this value.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct EdgarSettings {
+    /// `"<app or name> <contact email>"`, e.g. `"Jane Doe jane@example.com"`.
+    #[serde(default)]
+    pub user_agent: Option<String>,
+}
+
 // ─── Webhook config (generic BYOA alert channel) ────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
@@ -383,6 +397,9 @@ pub struct AppConfig {
     /// Universe of tickers to screen (overrides fetched list when non-empty)
     #[serde(default)]
     pub universe: Vec<String>,
+    /// Optional SEC EDGAR settings (`[edgar]`); only used by `ghost-alpha edgar`.
+    #[serde(default)]
+    pub edgar: Option<EdgarSettings>,
 }
 
 impl AppConfig {
@@ -485,6 +502,7 @@ impl AppConfig {
             },
             cache: CacheConfig::default(),
             universe: Vec::new(),
+            edgar: None,
         };
         config.validate()?;
         Ok(config)
