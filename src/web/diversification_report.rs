@@ -430,8 +430,13 @@ tr.optimal td { background: #d3f9d8 !important; font-weight: 600; }
 .summary { font-size: 0.85rem; color: #495057; margin-bottom: 0.75rem; }
 .empty { font-size: 0.85rem; color: #868e96; font-style: italic; }
 .chart-container { margin-top: 1rem; overflow-x: auto; }
+/* Chart tokens (the report is a standalone file, so it carries its own values). */
+:root { --ga-series-1: #0969da; --ga-text: #1f2328; --ga-muted: #57606a; }
+svg text { fill: var(--ga-text); }
+svg text.chart-muted { fill: var(--ga-muted); }
 footer { text-align: center; font-size: 0.75rem; color: #adb5bd; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }
 @media (prefers-color-scheme: dark) {
+  :root { --ga-series-1: #58a6ff; --ga-text: #c1c2c5; --ga-muted: #9ea7b3; }
   body { background: #1a1b1e; color: #c1c2c5; }
   header { border-bottom-color: #495057; }
   header h1 { color: #74c0fc; }
@@ -460,14 +465,14 @@ mod tests {
 
     fn sample_input() -> DiversificationReportInput {
         let plan_input = SellPlanInput {
-            ticker: "AMZN".into(),
+            ticker: "XYZ".into(),
             total_shares: 1000.0,
             cost_basis_per_share: 100.0,
             current_price: 200.0,
             acquired_date: NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
-            filing_status: FilingStatus::MarriedFilingJointly,
-            state_code: "WA".into(),
-            other_annual_income: 200_000.0,
+            filing_status: FilingStatus::Single,
+            state_code: "CA".into(),
+            other_annual_income: 150_000.0,
             assumed_price_growth: 0.0,
             horizon_years: 2,
             start_year: 2026,
@@ -476,28 +481,28 @@ mod tests {
 
         let sell_plan = prepare_selling_programme(&plan_input).unwrap();
 
-        let b = FederalCapGainsBrackets::mfj_2024();
-        let wa = state_tax_rate("WA").unwrap();
+        let b = FederalCapGainsBrackets::single_2024();
+        let wa = state_tax_rate("CA").unwrap();
         let lot = crate::portfolio::types::TaxLot {
             id: uuid::Uuid::new_v4(),
-            ticker: "AMZN".into(),
+            ticker: "XYZ".into(),
             shares: 1000.0,
             cost_basis_per_share: 100.0,
             acquired_date: NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
             acquisition_type: crate::portfolio::types::AcquisitionType::RsuVest,
             remaining_shares: 1000.0,
         };
-        let scenarios = compare_scenarios(&[lot], 1000.0, 5, 2026, 0.0, 200.0, 200_000.0, &b, &wa);
+        let scenarios = compare_scenarios(&[lot], 1000.0, 5, 2026, 0.0, 200.0, 150_000.0, &b, &wa);
 
         DiversificationReportInput {
-            ticker: "AMZN".into(),
+            ticker: "XYZ".into(),
             total_shares: 1000.0,
             cost_basis_per_share: 100.0,
             current_price: 200.0,
             acquired_date: NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
-            other_annual_income: 200_000.0,
-            state: "WA".into(),
-            filing: "MFJ".into(),
+            other_annual_income: 150_000.0,
+            state: "CA".into(),
+            filing: "Single".into(),
             other_portfolio_value: 50_000.0,
             brokerage: Brokerage::Fidelity,
             risk_profile: "Moderate".into(),
@@ -518,7 +523,7 @@ mod tests {
         let html = generate_diversification_report(&sample_input());
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("</html>"));
-        assert!(html.contains("AMZN"));
+        assert!(html.contains("XYZ"));
     }
 
     #[test]

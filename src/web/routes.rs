@@ -5,7 +5,8 @@ use serde::Deserialize;
 
 use crate::storage::db::Repository;
 
-use super::shell::{html_escape, shell};
+use super::charts::{accessible, decorative};
+use super::shell::{html_escape, page, table_view};
 use super::AppState;
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -123,11 +124,12 @@ pub async fn home(State(state): State<AppState>) -> Html<String> {
            name="date">
   </label>
 </div>
+<input type="search" data-filter-for="screen-table" aria-label="Filter screening results" placeholder="Filter screening results">
 <figure>
-<table><caption class="sr-only">Screening results ranked by score; close in USD, relative strength in percent</caption>
+<table id="screen-table"><caption class="sr-only">Screening results ranked by score; close in USD, relative strength in percent</caption>
   <thead>
     <tr>
-      <th scope="col">#</th><th scope="col">Ticker</th><th scope="col">Score</th><th scope="col">Grade</th><th scope="col">Minervini</th><th scope="col">RS%</th><th scope="col">Vol-Z</th><th scope="col">Close</th><th scope="col">Cond</th>
+      <th scope="col" data-sort="number"><button type="button">#</button></th><th scope="col" data-sort="text"><button type="button">Ticker</button></th><th scope="col" data-sort="number"><button type="button">Score</button></th><th scope="col" data-sort="text"><button type="button">Grade</button></th><th scope="col" data-sort="text"><button type="button">Minervini</button></th><th scope="col" data-sort="number"><button type="button">RS%</button></th><th scope="col" data-sort="number"><button type="button">Vol-Z</button></th><th scope="col" data-sort="number"><button type="button">Close</button></th><th scope="col" data-sort="number"><button type="button">Cond</button></th>
     </tr>
   </thead>
   <tbody {tbody_id} hx-get="/partials/screen-table" hx-trigger="every 60s" hx-include="[name=date]" hx-swap="innerHTML">
@@ -138,7 +140,7 @@ pub async fn home(State(state): State<AppState>) -> Html<String> {
 <p><small>Showing results for today. Results are saved automatically after each <code>ghost-alpha screen</code> run.</small></p>"#
     );
 
-    Html(shell("/", "Screening Results", &body))
+    page(&state, "/", "Screening Results", &body).await
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -159,11 +161,12 @@ pub async fn alerts_page(State(state): State<AppState>) -> Html<String> {
      hx-get="/partials/alert-calendar" hx-trigger="load">
   <p class="empty-state">Loading alert calendar...</p>
 </div>
+<input type="search" data-filter-for="alert-table" aria-label="Filter alerts" placeholder="Filter alerts">
 <figure>
-<table><caption class="sr-only">Alert history, newest first</caption>
+<table id="alert-table"><caption class="sr-only">Alert history, newest first</caption>
   <thead>
     <tr>
-      <th scope="col">Ticker</th><th scope="col">Type</th><th scope="col">Severity</th><th scope="col">Message</th><th scope="col">Sent At</th>
+      <th scope="col" data-sort="text"><button type="button">Ticker</button></th><th scope="col" data-sort="text"><button type="button">Type</button></th><th scope="col" data-sort="number"><button type="button">Severity</button></th><th scope="col" data-sort="text"><button type="button">Message</button></th><th scope="col" data-sort="text"><button type="button">Sent At</button></th>
     </tr>
   </thead>
   <tbody id="alert-tbody" hx-get="/partials/alert-list" hx-trigger="every 60s" hx-swap="innerHTML">
@@ -173,7 +176,7 @@ pub async fn alerts_page(State(state): State<AppState>) -> Html<String> {
 </figure>"#
     );
 
-    Html(shell("/alerts", "Alert History", &body))
+    page(&state, "/alerts", "Alert History", &body).await
 }
 
 // ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -204,11 +207,12 @@ pub async fn watchlist_page(State(state): State<AppState>) -> Html<String> {
     let wl_tbody_id = "id=\"watchlist-tbody\"";
     let wl_target = "hx-target=\"#watchlist-tbody\"";
     let body = format!(
-        r#"<figure>
-<table><caption class="sr-only">Watchlist tickers with latest score, grade and notes</caption>
+        r#"<input type="search" data-filter-for="watchlist-table" aria-label="Filter watchlist" placeholder="Filter watchlist">
+<figure>
+<table id="watchlist-table"><caption class="sr-only">Watchlist tickers with latest score, grade and notes</caption>
   <thead>
     <tr>
-      <th scope="col">Ticker</th><th scope="col">Added</th><th scope="col">Score</th><th scope="col">Grade</th><th scope="col">Notes</th><th scope="col">Action</th>
+      <th scope="col" data-sort="text"><button type="button">Ticker</button></th><th scope="col" data-sort="text"><button type="button">Added</button></th><th scope="col" data-sort="number"><button type="button">Score</button></th><th scope="col" data-sort="text"><button type="button">Grade</button></th><th scope="col" data-sort="text"><button type="button">Notes</button></th><th scope="col">Action</th>
     </tr>
   </thead>
   <tbody {wl_tbody_id} aria-live="polite">
@@ -232,7 +236,7 @@ pub async fn watchlist_page(State(state): State<AppState>) -> Html<String> {
 </form>"#
     );
 
-    Html(shell("/watchlist", "Watchlist", &body))
+    page(&state, "/watchlist", "Watchlist", &body).await
 }
 
 // ─── Regime ───────────────────────────────────────────────────────────────────
@@ -323,7 +327,7 @@ pub async fn regime_page(State(state): State<AppState>) -> Html<String> {
 </div>"#
     );
 
-    Html(shell("/regime", "Market Regime", &body))
+    page(&state, "/regime", "Market Regime", &body).await
 }
 
 // ─── Flagged Stocks ──────────────────────────────────────────────────────────
@@ -379,12 +383,12 @@ pub async fn flagged_page(State(state): State<AppState>) -> Html<String> {
 </figure>"#
     );
 
-    Html(shell("/flagged", "Flagged Stocks", &body))
+    page(&state, "/flagged", "Flagged Stocks", &body).await
 }
 
 // ─── Strategies ──────────────────────────────────────────────────────────────
 
-pub async fn strategies_page() -> Html<String> {
+pub async fn strategies_page(State(state): State<AppState>) -> Html<String> {
     let body = r#"<figure>
 <table><caption class="sr-only">Available screening strategies and their descriptions</caption>
   <thead>
@@ -399,7 +403,7 @@ pub async fn strategies_page() -> Html<String> {
 </table>
 </figure>"#;
 
-    Html(shell("/strategies", "Strategies", body))
+    page(&state, "/strategies", "Strategies", body).await
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -449,7 +453,7 @@ pub async fn settings_page(State(state): State<AppState>) -> Html<String> {
         config.alerts.max_daily_alerts,
     );
 
-    Html(shell("/settings", "Settings", &body))
+    page(&state, "/settings", "Settings", &body).await
 }
 
 fn mask_secret(s: &str) -> String {
@@ -603,6 +607,22 @@ pub async fn watchlist_remove(
 
 // ─── Shared rendering helpers ────────────────────────────────────────────────
 
+/// Ticker cell content: a link to the valuation page for that symbol.
+fn ticker_link(ticker: &str) -> String {
+    let mut q = String::with_capacity(ticker.len());
+    for b in ticker.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_') {
+            q.push(b as char);
+        } else {
+            q.push_str(&format!("%{b:02X}"));
+        }
+    }
+    format!(
+        r#"<a href="/valuation?ticker={q}">{}</a>"#,
+        html_escape(ticker)
+    )
+}
+
 fn render_screen_rows(results: &[crate::analysis::screener::ScreenResult]) -> String {
     if results.is_empty() {
         return r#"<tr><td colspan="9" class="empty-state">No screening results for today. Run <code>ghost-alpha screen</code> to populate.</td></tr>"#
@@ -612,11 +632,11 @@ fn render_screen_rows(results: &[crate::analysis::screener::ScreenResult]) -> St
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            let ticker_esc = html_escape(&r.ticker);
+            let ticker_esc = ticker_link(&r.ticker);
             let pass = if r.minervini_pass {
-                "<span style='color:#51cf66'>&#10003;</span>"
+                r#"<span class="pass">&#10003;</span>"#
             } else {
-                "<span style='color:#ff6b6b'>&#10007;</span>"
+                r#"<span class="fail">&#10007;</span>"#
             };
             let grade = grade_badge(&r.grade);
             format!(
@@ -656,15 +676,21 @@ fn render_alert_rows(
     filtered
         .iter()
         .map(|a| {
-            let badge = match a.severity.as_str() {
-                "CRITICAL" => format!(r#"<span class="badge-critical">{}</span>"#, a.severity),
-                "WARNING" => format!(r#"<span class="badge-warning">{}</span>"#, a.severity),
-                _ => format!(r#"<span class="badge-info">{}</span>"#, a.severity),
+            let sev = html_escape(&a.severity);
+            let (class, rank) = match a.severity.as_str() {
+                "CRITICAL" => ("badge-critical", 3),
+                "WARNING" => ("badge-warning", 2),
+                _ => ("badge-info", 1),
             };
+            let badge = format!(r#"<span class="{class}">{sev}</span>"#);
             let msg = html_escape(&a.message);
             format!(
-                "<tr><td><strong>{}</strong></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-                a.ticker, a.alert_type, badge, msg, a.sent_at
+                "<tr><td><strong>{}</strong></td><td>{}</td><td data-sort-value=\"{rank}\">{}</td><td>{}</td><td>{}</td></tr>",
+                ticker_link(&a.ticker),
+                html_escape(&a.alert_type),
+                badge,
+                msg,
+                html_escape(&a.sent_at)
             )
         })
         .collect::<Vec<_>>()
@@ -688,7 +714,7 @@ fn render_watchlist_rows(
                 .unwrap_or_else(|| "---".to_string());
             let score_cell = match sparklines.get(&e.ticker) {
                 Some(scores) if scores.len() >= 2 => {
-                    let svg = super::charts::sparkline_svg(scores, 120, 24);
+                    let svg = decorative(&super::charts::sparkline_svg(scores, 120, 24));
                     format!(r#"<span style="display:inline-flex;align-items:center;gap:6px;">{svg} {score_text}</span>"#)
                 }
                 _ => score_text,
@@ -696,10 +722,11 @@ fn render_watchlist_rows(
             let grade = html_escape(e.last_grade.as_deref().unwrap_or("---"));
             let notes = html_escape(e.notes.as_deref().unwrap_or(""));
             let ticker_esc = html_escape(&e.ticker);
+            let ticker_cell = ticker_link(&e.ticker);
             let wl_tgt = "hx-target=\"#watchlist-tbody\"";
             format!(
                 r#"<tr>
-                      <td><strong>{ticker_esc}</strong></td>
+                      <td><strong>{ticker_cell}</strong></td>
                       <td>{}</td>
                       <td>{score_cell}</td>
                       <td>{grade}</td>
@@ -721,7 +748,7 @@ fn render_watchlist_rows(
 
 // ─── Analytics page ──────────────────────────────────────────────────────────
 
-pub async fn analytics_page(State(_state): State<AppState>) -> Html<String> {
+pub async fn analytics_page(State(state): State<AppState>) -> Html<String> {
     let body = r##"
 <h2>Composite Score Heatmap</h2>
 <div class="filter-bar">
@@ -756,7 +783,7 @@ pub async fn analytics_page(State(_state): State<AppState>) -> Html<String> {
   <p class="empty-state">Loading RS scatter plot...</p>
 </div>"##;
 
-    Html(shell("/analytics", "Analytics", body))
+    page(&state, "/analytics", "Analytics", body).await
 }
 
 // ─── Analytics partial endpoints ─────────────────────────────────────────────
@@ -848,8 +875,33 @@ pub async fn score_heatmap_partial(
     let ticker_refs: Vec<&str> = tickers_final.iter().map(|s| s.as_str()).collect();
     let date_refs: Vec<&str> = dates_vec.iter().map(|s| s.as_str()).collect();
 
-    let svg = heatmap_svg(&data, &ticker_refs, &date_refs, 800, 400, score_color);
-    Html(svg)
+    let svg = accessible(
+        &heatmap_svg(&data, &ticker_refs, &date_refs, 800, 400, score_color),
+        "Composite score heatmap",
+        &format!(
+            "Grid of composite scores (0 to 100) for {} tickers across {} dates; greener cells are higher scores.",
+            ticker_refs.len(),
+            date_refs.len()
+        ),
+    );
+    let table_rows: Vec<Vec<String>> = tickers_final
+        .iter()
+        .map(|t| {
+            std::iter::once(t.clone())
+                .chain(dates_vec.iter().map(|d| {
+                    score_map
+                        .get(&(t.clone(), d.clone()))
+                        .map(|(score, _)| format!("{score:.1}"))
+                        .unwrap_or_else(|| "-".to_string())
+                }))
+                .collect()
+        })
+        .collect();
+    let headers: Vec<String> = std::iter::once("Ticker".to_string())
+        .chain(dates_vec.iter().cloned())
+        .collect();
+    let view = table_view("Composite score by ticker and date", &headers, &table_rows);
+    Html(format!("{svg}{view}"))
 }
 
 pub async fn sentiment_heatmap_partial(
@@ -927,15 +979,40 @@ pub async fn sentiment_heatmap_partial(
     let ticker_refs: Vec<&str> = tickers_final.iter().map(|s| s.as_str()).collect();
     let date_refs: Vec<&str> = dates_vec.iter().map(|s| s.as_str()).collect();
 
-    let svg = heatmap_svg(
-        &data,
-        &ticker_refs,
-        &date_refs,
-        800,
-        400,
-        sentiment_color_normalized,
+    let svg = accessible(
+        &heatmap_svg(
+            &data,
+            &ticker_refs,
+            &date_refs,
+            800,
+            400,
+            sentiment_color_normalized,
+        ),
+        "Sentiment heatmap",
+        &format!(
+            "Grid of sentiment scores for {} tickers across {} dates, normalised so greener cells are more positive.",
+            ticker_refs.len(),
+            date_refs.len()
+        ),
     );
-    Html(svg)
+    let table_rows: Vec<Vec<String>> = tickers_final
+        .iter()
+        .map(|t| {
+            std::iter::once(t.clone())
+                .chain(dates_vec.iter().map(|d| {
+                    score_map
+                        .get(&(t.clone(), d.clone()))
+                        .map(|score| format!("{score:.2}"))
+                        .unwrap_or_else(|| "-".to_string())
+                }))
+                .collect()
+        })
+        .collect();
+    let headers: Vec<String> = std::iter::once("Ticker".to_string())
+        .chain(dates_vec.iter().cloned())
+        .collect();
+    let view = table_view("Sentiment score by ticker and date", &headers, &table_rows);
+    Html(format!("{svg}{view}"))
 }
 
 pub async fn grade_dist_partial(
@@ -971,7 +1048,12 @@ pub async fn grade_dist_partial(
 
     let grade_order = ["F", "D", "C", "B", "A", "A+"];
     let grade_colors = [
-        "#ff6b6b", "#fd7e14", "#ffd43b", "#74c0fc", "#37b24d", "#2b8a3e",
+        "var(--ga-heat-1)",
+        "var(--ga-heat-2)",
+        "var(--ga-heat-3)",
+        "var(--ga-series-1)",
+        "var(--ga-heat-4)",
+        "var(--ga-heat-5)",
     ];
 
     let series: Vec<AreaSeries> = grade_order
@@ -997,8 +1079,27 @@ pub async fn grade_dist_partial(
         .collect();
 
     let date_refs: Vec<&str> = dates.iter().map(|s| s.as_str()).collect();
-    let svg = stacked_area_svg(&series, &date_refs, 700, 250);
-    Html(svg)
+    let svg = accessible(
+        &stacked_area_svg(&series, &date_refs, 700, 250),
+        "Grade distribution over time",
+        &format!(
+            "Stacked area chart of the number of stocks per grade (F to A+) across {} dates.",
+            date_refs.len()
+        ),
+    );
+    let mut headers: Vec<String> = vec!["Date".to_string()];
+    headers.extend(grade_order.iter().map(|g| format!("{g} (stocks)")));
+    let table_rows: Vec<Vec<String>> = dates
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            std::iter::once(d.clone())
+                .chain(series.iter().map(|s| format!("{:.0}", s.values[i])))
+                .collect()
+        })
+        .collect();
+    let view = table_view("Number of stocks per grade by date", &headers, &table_rows);
+    Html(format!("{svg}{view}"))
 }
 
 pub async fn rs_scatter_partial(
@@ -1054,12 +1155,12 @@ pub async fn rs_scatter_partial(
 
     let grade_to_color = |g: &str| -> String {
         match g {
-            "A+" => "#2b8a3e",
-            "A" => "#37b24d",
-            "B" => "#74c0fc",
-            "C" => "#ffd43b",
-            "D" => "#fd7e14",
-            _ => "#ff6b6b",
+            "A+" => "var(--ga-heat-5)",
+            "A" => "var(--ga-heat-4)",
+            "B" => "var(--ga-series-1)",
+            "C" => "var(--ga-heat-3)",
+            "D" => "var(--ga-heat-2)",
+            _ => "var(--ga-heat-1)",
         }
         .to_string()
     };
@@ -1081,8 +1182,32 @@ pub async fn rs_scatter_partial(
         })
         .collect();
 
-    let svg = scatter_svg(&points, "RS Percentile", "RS Momentum", 600, 400);
-    Html(svg)
+    let svg = accessible(
+        &scatter_svg(&points, "RS Percentile", "RS Momentum", 600, 400),
+        "Relative strength map",
+        &format!(
+            "Scatter plot of {} stocks: relative-strength percentile on the horizontal axis against 21-day relative-strength momentum on the vertical axis; point size and colour reflect composite score and grade.",
+            points.len()
+        ),
+    );
+    let table_rows: Vec<Vec<String>> = points
+        .iter()
+        .zip(rows.iter())
+        .map(|(p, r)| {
+            vec![
+                p.label.clone(),
+                format!("{:.1}", p.x),
+                format!("{:.2}", p.y),
+                r.grade.clone(),
+            ]
+        })
+        .collect();
+    let view = table_view(
+        "Relative strength percentile and momentum by ticker",
+        &["Ticker", "RS percentile", "RS momentum", "Grade"],
+        &table_rows,
+    );
+    Html(format!("{svg}{view}"))
 }
 
 pub async fn alert_calendar_partial(
@@ -1126,8 +1251,30 @@ pub async fn alert_calendar_partial(
         })
         .collect();
 
-    let svg = calendar_heatmap_svg(&days, 250, 100);
-    Html(svg)
+    let svg = accessible(
+        &calendar_heatmap_svg(&days, 250, 100),
+        "Alert calendar",
+        &format!(
+            "Calendar heatmap of alert counts on {} weekdays; darker cells mean more alerts and a dot marks days with a critical alert.",
+            days.len()
+        ),
+    );
+    let table_rows: Vec<Vec<String>> = days
+        .iter()
+        .map(|d| {
+            vec![
+                d.date.clone(),
+                d.count.to_string(),
+                if d.has_critical { "Yes" } else { "No" }.to_string(),
+            ]
+        })
+        .collect();
+    let view = table_view(
+        "Alerts per weekday",
+        &["Date", "Alerts", "Critical"],
+        &table_rows,
+    );
+    Html(format!("{svg}{view}"))
 }
 
 pub async fn regime_history_partial(
@@ -1162,13 +1309,39 @@ pub async fn regime_history_partial(
         });
     }
 
-    let strip = regime_timeline_svg(&entries, 800, 30);
+    let strip = accessible(
+        &regime_timeline_svg(&entries, 800, 30),
+        "Market regime timeline",
+        &format!(
+            "Coloured strip of {} consecutive regime periods over {} days (green bull, red bear, yellow sideways).",
+            entries.len(),
+            history.len()
+        ),
+    );
 
     let spy_prices: Vec<f64> = history.iter().map(|s| s.spy_close).collect();
-    let price_line = sparkline_svg(&spy_prices, 800, 60);
+    let price_line = accessible(
+        &sparkline_svg(&spy_prices, 800, 60),
+        "SPY price",
+        &format!(
+            "Line chart of the SPY closing price over {} days, from {:.2} to {:.2} US dollars.",
+            spy_prices.len(),
+            spy_prices.first().copied().unwrap_or(0.0),
+            spy_prices.last().copied().unwrap_or(0.0)
+        ),
+    );
+    let regime_rows: Vec<Vec<String>> = entries
+        .iter()
+        .map(|e| vec![format!("{:?}", e.regime), e.days.to_string()])
+        .collect();
+    let view = table_view(
+        "Consecutive market regime periods",
+        &["Regime", "Days"],
+        &regime_rows,
+    );
 
     let svg = format!(
-        "<div class=\"chart-container\"><div style=\"margin-bottom:4px\"><small>Regime</small></div>{strip}<div style=\"margin-top:8px;margin-bottom:4px\"><small>SPY Price</small></div>{price_line}</div>"
+        "<div class=\"chart-container\"><div style=\"margin-bottom:4px\"><small>Regime</small></div>{strip}<div style=\"margin-top:8px;margin-bottom:4px\"><small>SPY Price</small></div>{price_line}</div>{view}"
     );
     Html(svg)
 }
@@ -1204,12 +1377,21 @@ pub async fn macro_gauges_partial(State(state): State<AppState>) -> Html<String>
         .min(80.0);
 
     let risk_color = match latest.risk_level {
-        crate::analysis::macro_risk::MacroRiskLevel::Normal => "#51cf66",
-        crate::analysis::macro_risk::MacroRiskLevel::Elevated => "#ffd43b",
-        crate::analysis::macro_risk::MacroRiskLevel::HighRisk => "#ff6b6b",
+        crate::analysis::macro_risk::MacroRiskLevel::Normal => "var(--ga-pos)",
+        crate::analysis::macro_risk::MacroRiskLevel::Elevated => "var(--ga-heat-3)",
+        crate::analysis::macro_risk::MacroRiskLevel::HighRisk => "var(--ga-neg)",
     };
 
-    let vix_gauge = gauge_svg(latest.vix_level, vix_min, vix_max, "VIX", risk_color);
+    let vix_gauge = accessible(
+        &gauge_svg(latest.vix_level, vix_min, vix_max, "VIX", risk_color),
+        "VIX gauge",
+        &format!(
+            "Gauge showing the VIX volatility index at {:.1}.",
+            latest.vix_level
+        ),
+    );
+    let mut table_rows: Vec<Vec<String>> =
+        vec![vec!["VIX".to_string(), format!("{:.1}", latest.vix_level)]];
 
     let mut gauges = format!(
         "<div class=\"gauge-panel\"><div class=\"gauge-item\">{vix_gauge}<div class=\"gauge-label\">VIX {:.1}</div></div>",
@@ -1217,7 +1399,14 @@ pub async fn macro_gauges_partial(State(state): State<AppState>) -> Html<String>
     );
 
     if let Some(oas) = latest.hy_oas_bps {
-        let g = gauge_svg(oas, 200.0, 800.0, "HY OAS", risk_color);
+        let g = accessible(
+            &gauge_svg(oas, 200.0, 800.0, "HY OAS", risk_color),
+            "High-yield spread gauge",
+            &format!(
+                "Gauge showing the high-yield option-adjusted spread at {oas:.0} basis points."
+            ),
+        );
+        table_rows.push(vec!["HY OAS (bps)".to_string(), format!("{oas:.0}")]);
         gauges.push_str(&format!(
             "<div class=\"gauge-item\">{g}<div class=\"gauge-label\">HY OAS {:.0} bps</div></div>",
             oas
@@ -1225,7 +1414,17 @@ pub async fn macro_gauges_partial(State(state): State<AppState>) -> Html<String>
     }
 
     if let Some(yc) = latest.yield_curve_2s10s {
-        let g = gauge_svg(yc, -1.0, 3.0, "2s10s", risk_color);
+        let g = accessible(
+            &gauge_svg(yc, -1.0, 3.0, "2s10s", risk_color),
+            "Yield curve gauge",
+            &format!(
+                "Gauge showing the 2-year to 10-year Treasury yield curve at {yc:.2} percent."
+            ),
+        );
+        table_rows.push(vec![
+            "Yield curve 2s10s (%)".to_string(),
+            format!("{yc:.2}"),
+        ]);
         gauges.push_str(&format!(
             "<div class=\"gauge-item\">{g}<div class=\"gauge-label\">Yield Curve {:.2}%</div></div>",
             yc
@@ -1233,7 +1432,12 @@ pub async fn macro_gauges_partial(State(state): State<AppState>) -> Html<String>
     }
 
     if let Some(pc) = latest.put_call_ratio {
-        let g = gauge_svg(pc, 0.5, 1.5, "P/C", risk_color);
+        let g = accessible(
+            &gauge_svg(pc, 0.5, 1.5, "P/C", risk_color),
+            "Put/call ratio gauge",
+            &format!("Gauge showing the put/call ratio at {pc:.2}."),
+        );
+        table_rows.push(vec!["Put/call ratio".to_string(), format!("{pc:.2}")]);
         gauges.push_str(&format!(
             "<div class=\"gauge-item\">{g}<div class=\"gauge-label\">Put/Call {:.2}</div></div>",
             pc
@@ -1241,6 +1445,11 @@ pub async fn macro_gauges_partial(State(state): State<AppState>) -> Html<String>
     }
 
     gauges.push_str("</div>");
+    gauges.push_str(&table_view(
+        "Latest macro risk readings",
+        &["Indicator", "Value"],
+        &table_rows,
+    ));
     Html(gauges)
 }
 

@@ -2,6 +2,7 @@ pub mod assets;
 pub mod charts;
 pub mod dashboard_routes;
 pub mod diversification_report;
+pub mod freshness;
 pub mod quarterly_report;
 pub mod routes;
 pub mod shell;

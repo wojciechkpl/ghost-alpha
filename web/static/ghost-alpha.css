@@ -315,3 +315,88 @@ table th[data-sort]:hover { text-decoration: underline; }
   .gauge-panel { gap: 0.75rem; }
   .gauge-item svg { width: 90px; height: 90px; }
 }
+
+/* ── Batch 2 additions ────────────────────────────────────────────────────── */
+
+/* SVG text follows the theme; muted variants for axis titles and tick labels. */
+svg text { fill: var(--ga-text); }
+svg text.chart-muted { fill: var(--ga-muted); }
+
+.freshness-chip {
+  display: inline-block;
+  margin-left: var(--ga-space-3);
+  padding: 2px 10px;
+  border: 1px solid var(--ga-border);
+  border-radius: 999px;
+  background: var(--ga-surface);
+  color: var(--ga-text);
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.freshness-chip::before { margin-right: 0.4em; }
+.freshness-chip[data-freshness="fresh"] { border-color: var(--ga-pos); }
+.freshness-chip[data-freshness="fresh"]::before { content: "\25CF"; color: var(--ga-pos); }
+.freshness-chip[data-freshness="warn"] { border-color: var(--ga-warn); }
+.freshness-chip[data-freshness="warn"]::before { content: "\25B2"; color: var(--ga-warn); }
+.freshness-chip[data-freshness="stale"] { border-color: var(--ga-neg); }
+.freshness-chip[data-freshness="stale"]::before { content: "\2716"; color: var(--ga-neg); }
+.freshness-chip[data-freshness="none"] { border-color: var(--ga-muted); color: var(--ga-muted); }
+.freshness-chip[data-freshness="none"]::before { content: "\25CB"; color: var(--ga-muted); }
+
+.banner {
+  margin: var(--ga-space-3) 0;
+  padding: var(--ga-space-2) var(--ga-space-3);
+  border: 1px solid var(--ga-border);
+  border-left-width: 4px;
+  border-radius: var(--ga-radius);
+  background: var(--ga-surface);
+  color: var(--ga-text);
+}
+.banner-illustrative { border-left-color: var(--ga-warn); }
+
+.hint { color: var(--ga-muted); font-size: 0.85em; }
+
+.risk-score { font-size: 1.5em; }
+.risk-low { color: var(--ga-pos); }
+.risk-moderate { color: var(--ga-warn); }
+.risk-high, .risk-extreme { color: var(--ga-neg); }
+
+.sps {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--ga-radius);
+  font-size: 0.8em;
+  font-weight: 600;
+}
+.sps-green    { background: var(--ga-badge-bull-bg); color: var(--ga-badge-bull-fg); }
+.sps-yellow   { background: var(--ga-badge-warning-bg); color: var(--ga-badge-warning-fg); }
+.sps-orange   { background: var(--ga-badge-grade-d-bg); color: var(--ga-badge-grade-d-fg); }
+.sps-red      { background: var(--ga-badge-bear-bg); color: var(--ga-badge-bear-fg); }
+.sps-critical { background: var(--ga-badge-critical-bg); color: var(--ga-badge-critical-fg); }
+
+/* Sortable headers: a real button that looks like the header text. */
+th[data-sort] button {
+  all: unset;
+  box-sizing: border-box;
+  min-height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+th[data-sort] button:focus-visible { outline: 2px solid var(--ga-focus); outline-offset: 2px; }
+th[data-sort] button::after { content: "\2195"; color: var(--ga-muted); font-size: 0.8em; }
+th[aria-sort="ascending"] button::after { content: "\25B2"; color: var(--ga-text); }
+th[aria-sort="descending"] button::after { content: "\25BC"; color: var(--ga-text); }
+
+input[type="search"][data-filter-for] { max-width: 20rem; margin-bottom: var(--ga-space-2); }
+
+.table-view { margin: var(--ga-space-2) 0 var(--ga-space-3); }
+.table-view .table-wrap { overflow-x: auto; }
+
+/* Correlation matrix: text on saturated cells (|r| >= 0.5). */
+svg text.on-strong { fill: var(--ga-on-strong); }
+.on-strong { fill: var(--ga-on-strong); }

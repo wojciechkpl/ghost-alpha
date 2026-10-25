@@ -1,5 +1,6 @@
 use crate::data::models::MarketRegime;
 use std::f64::consts::PI;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Escape text for safe embedding in SVG/XML elements (text, title).
 pub fn svg_escape(s: &str) -> String {
@@ -10,6 +11,43 @@ pub fn svg_escape(s: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+static SVG_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Mark an inline SVG as decorative (hidden from assistive technology).
+///
+/// Use for small in-cell graphics whose value is also printed as text.
+pub fn decorative(svg: &str) -> String {
+    svg.replacen("<svg ", "<svg aria-hidden=\"true\" focusable=\"false\" ", 1)
+}
+
+/// Give an inline SVG an accessible name and description.
+///
+/// Adds `role="img"`, `aria-labelledby` and a `<title>`/`<desc>` pair with a
+/// process-unique id, so several charts can share one response.
+pub fn accessible(svg: &str, title: &str, desc: &str) -> String {
+    debug_assert!(
+        svg.trim_start().starts_with("<svg"),
+        "accessible() expects an <svg> element"
+    );
+    let id = SVG_ID.fetch_add(1, Ordering::Relaxed);
+    let Some(open_end) = svg.find('>') else {
+        return svg.to_string();
+    };
+    let (open, rest) = svg.split_at(open_end + 1);
+    let open = open.replacen(
+        "<svg ",
+        &format!(
+            "<svg role=\"img\" aria-labelledby=\"ga-svg-{id}\" aria-describedby=\"ga-desc-{id}\" "
+        ),
+        1,
+    );
+    format!(
+        "{open}<title id=\"ga-svg-{id}\">{}</title><desc id=\"ga-desc-{id}\">{}</desc>{rest}",
+        svg_escape(title),
+        svg_escape(desc)
+    )
+}
+
 /// Render a horizontal score bar as an inline SVG string.
 ///
 /// `score` is clamped to `[0, 100]`. The filled portion scales linearly.
@@ -18,14 +56,14 @@ pub fn score_bar_svg(score: f64, width: u32, height: u32) -> String {
     let fill_width = (clamped / 100.0) * width as f64;
 
     let color = if clamped >= 80.0 {
-        "#51cf66"
+        "var(--ga-pos)"
     } else if clamped >= 50.0 {
-        "#ffd43b"
+        "var(--ga-heat-3)"
     } else {
-        "#ff6b6b"
+        "var(--ga-neg)"
     };
 
-    let bg = "#e9ecef";
+    let bg = "var(--ga-border)";
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><rect x="0" y="0" width="{width}" height="{height}" fill="{bg}" rx="3"/><rect x="0" y="0" width="{fw:.1}" height="{height}" fill="{color}" rx="3"/></svg>"#,
         fw = fill_width,
@@ -41,9 +79,9 @@ pub struct RegimeEntry {
 /// Render a horizontal stacked-bar regime timeline as an inline SVG string.
 ///
 /// Each entry occupies a proportional width of the total. Colors:
-/// - Bull = green (#51cf66)
-/// - Bear = red (#ff6b6b)
-/// - Sideways = yellow (#ffd43b)
+/// - Bull = green (`--ga-pos`)
+/// - Bear = red (`--ga-neg`)
+/// - Sideways = yellow (`--ga-heat-3`)
 pub fn regime_timeline_svg(entries: &[RegimeEntry], width: u32, height: u32) -> String {
     if entries.is_empty() {
         return format!(
@@ -64,9 +102,9 @@ pub fn regime_timeline_svg(entries: &[RegimeEntry], width: u32, height: u32) -> 
     for entry in entries {
         let w = (entry.days as f64 / total_days as f64) * width as f64;
         let color = match entry.regime {
-            MarketRegime::Bull => "#51cf66",
-            MarketRegime::Bear => "#ff6b6b",
-            MarketRegime::Sideways => "#ffd43b",
+            MarketRegime::Bull => "var(--ga-pos)",
+            MarketRegime::Bear => "var(--ga-neg)",
+            MarketRegime::Sideways => "var(--ga-heat-3)",
         };
         rects.push_str(&format!(
             r#"<rect x="{x:.1}" y="0" width="{w:.1}" height="{height}" fill="{color}"/>"#,
@@ -123,7 +161,7 @@ pub fn sparkline_svg(values: &[f64], width: u32, height: u32) -> String {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let stroke = "#228be6";
+    let stroke = "var(--ga-series-1)";
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"><polyline points="{points}" fill="none" stroke="{stroke}" stroke-width="1.5"/></svg>"#
     )
@@ -140,30 +178,30 @@ pub struct HeatmapCell {
 /// Map a composite score (0-100) to a fill color.
 pub fn score_color(score: f64) -> &'static str {
     if score >= 90.0 {
-        "#2b8a3e"
+        "var(--ga-heat-5)"
     } else if score >= 70.0 {
-        "#51cf66"
+        "var(--ga-heat-4)"
     } else if score >= 50.0 {
-        "#ffd43b"
+        "var(--ga-heat-3)"
     } else if score >= 30.0 {
-        "#fd7e14"
+        "var(--ga-heat-2)"
     } else {
-        "#e03131"
+        "var(--ga-heat-1)"
     }
 }
 
 /// Map a sentiment score to a fill color.
 pub fn sentiment_color(score: f64) -> &'static str {
     if score >= 12.0 {
-        "#2b8a3e"
+        "var(--ga-heat-5)"
     } else if score >= 9.0 {
-        "#51cf66"
+        "var(--ga-heat-4)"
     } else if score >= 6.0 {
-        "#adb5bd"
+        "var(--ga-heat-neutral)"
     } else if score >= 3.0 {
-        "#fd7e14"
+        "var(--ga-heat-2)"
     } else {
-        "#e03131"
+        "var(--ga-heat-1)"
     }
 }
 
@@ -171,15 +209,15 @@ pub fn sentiment_color(score: f64) -> &'static str {
 /// 0 = very negative (red), 50 = neutral (gray), 100 = very positive (green).
 pub fn sentiment_color_normalized(score: f64) -> &'static str {
     if score >= 80.0 {
-        "#2b8a3e" // dark green - very positive
+        "var(--ga-heat-5)" // dark green - very positive
     } else if score >= 60.0 {
-        "#51cf66" // light green - positive
+        "var(--ga-heat-4)" // light green - positive
     } else if score >= 40.0 {
-        "#adb5bd" // gray - neutral
+        "var(--ga-heat-neutral)" // gray - neutral
     } else if score >= 20.0 {
-        "#fd7e14" // orange - negative
+        "var(--ga-heat-2)" // orange - negative
     } else {
-        "#e03131" // red - very negative
+        "var(--ga-heat-1)" // red - very negative
     }
 }
 
@@ -194,7 +232,8 @@ pub fn heatmap_svg(
     color_fn: fn(f64) -> &'static str,
 ) -> String {
     let left_margin: f64 = 60.0;
-    let top_margin: f64 = 30.0;
+    let top_margin: f64 = 66.0;
+    let right_margin: f64 = 40.0;
 
     if data.is_empty() || tickers.is_empty() || dates.is_empty() {
         return format!(
@@ -206,7 +245,7 @@ pub fn heatmap_svg(
     let num_cols = dates.len();
     let gap: f64 = 1.0;
 
-    let avail_w = (width as f64 - left_margin).max(1.0);
+    let avail_w = (width as f64 - left_margin - right_margin).max(1.0);
     let avail_h = (height as f64 - top_margin).max(1.0);
     let cell_w = (avail_w / num_cols as f64 - gap).max(1.0);
     let cell_h = (avail_h / num_rows as f64 - gap).max(1.0);
@@ -214,7 +253,7 @@ pub fn heatmap_svg(
     let mut body = String::new();
 
     // Date labels (rotated 45deg, thinned to avoid overlap)
-    let font10 = "10";
+    let font10 = "11";
     let label_step = 1.max(num_cols / 6);
     for (ci, date) in dates.iter().enumerate() {
         if ci % label_step != 0 {
@@ -223,7 +262,7 @@ pub fn heatmap_svg(
         let x = left_margin + ci as f64 * (cell_w + gap) + cell_w / 2.0;
         let y = top_margin - 4.0;
         body.push_str(&format!(
-            r#"<text x="{x:.1}" y="{y:.1}" font-size="{font10}" text-anchor="end" transform="rotate(-45 {x:.1} {y:.1})">{}</text>"#,
+            r#"<text x="{x:.1}" y="{y:.1}" font-size="{font10}" text-anchor="start" transform="rotate(-45 {x:.1} {y:.1})">{}</text>"#,
             svg_escape(date)
         ));
     }
@@ -238,8 +277,18 @@ pub fn heatmap_svg(
         ));
     }
 
+    // Axis titles
+    let date_title_x = left_margin + avail_w / 2.0;
+    body.push_str(&format!(
+        r#"<text class="axis-title chart-muted" x="{date_title_x:.1}" y="11" font-size="11" text-anchor="middle">Date</text>"#
+    ));
+    let ticker_title_y = top_margin + avail_h / 2.0;
+    body.push_str(&format!(
+        r#"<text class="axis-title chart-muted" x="11" y="{ticker_title_y:.1}" font-size="11" text-anchor="middle" transform="rotate(-90 11 {ticker_title_y:.1})">Ticker</text>"#
+    ));
+
     // Cells
-    let missing_color = "#dee2e6";
+    let missing_color = "var(--ga-heat-missing)";
     for (ri, row) in data.iter().enumerate() {
         for ci in 0..num_cols {
             let rx = left_margin + ci as f64 * (cell_w + gap);
@@ -280,7 +329,7 @@ pub fn stacked_area_svg(series: &[AreaSeries], dates: &[&str], width: u32, heigh
     let ml: f64 = 40.0;
     let mr: f64 = 20.0;
     let mt: f64 = 10.0;
-    let mb: f64 = 30.0;
+    let mb: f64 = 44.0;
 
     if series.is_empty() || dates.is_empty() {
         return format!(
@@ -329,7 +378,7 @@ pub fn stacked_area_svg(series: &[AreaSeries], dates: &[&str], width: u32, heigh
     let mut body = String::new();
 
     // Draw each area from bottom to top
-    let stroke_color = "#ffffff";
+    let stroke_color = "var(--ga-bg)";
     for (si, s) in series.iter().enumerate() {
         let bottom = &cumulative[si];
         let top = &cumulative[si + 1];
@@ -360,8 +409,8 @@ pub fn stacked_area_svg(series: &[AreaSeries], dates: &[&str], width: u32, heigh
     }
 
     // X-axis date labels (every 5th)
-    let font10 = "10";
-    let label_y = height as f64 - 5.0;
+    let font10 = "11";
+    let label_y = height as f64 - 20.0;
     for (i, date) in dates.iter().enumerate() {
         if i % 5 == 0 {
             let x = x_of(i);
@@ -370,6 +419,15 @@ pub fn stacked_area_svg(series: &[AreaSeries], dates: &[&str], width: u32, heigh
             ));
         }
     }
+    let title_x = ml + plot_w / 2.0;
+    let title_y = height as f64 - 5.0;
+    body.push_str(&format!(
+        r#"<text class="axis-title chart-muted" x="{title_x:.1}" y="{title_y:.1}" font-size="11" text-anchor="middle">Date</text>"#
+    ));
+    let y_title_y = mt + plot_h / 2.0;
+    body.push_str(&format!(
+        r#"<text class="axis-title chart-muted" x="12" y="{y_title_y:.1}" font-size="11" text-anchor="middle" transform="rotate(-90 12 {y_title_y:.1})">Count (stocks)</text>"#
+    ));
 
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{body}</svg>"#
@@ -432,7 +490,7 @@ pub fn scatter_svg(
 
     // Quadrant dividers
     let dash = "4,4";
-    let gray = "#adb5bd";
+    let gray = "var(--ga-muted)";
     let mid_x = px(50.0);
     let zero_y = py(0.0);
     body.push_str(&format!(
@@ -450,13 +508,13 @@ pub fn scatter_svg(
         let frac = i as f64 / num_y_ticks as f64;
         let val = y_min + frac * y_range;
         let tick_y = py(val);
-        let grid_color = "#dee2e6";
+        let grid_color = "var(--ga-border)";
         body.push_str(&format!(
             r#"<line x1="{ml:.1}" y1="{tick_y:.1}" x2="{x2:.1}" y2="{tick_y:.1}" stroke="{grid_color}" stroke-width="0.5"/>"#,
             x2 = ml + plot_w,
         ));
         body.push_str(&format!(
-            r#"<text x="{tx:.1}" y="{ty:.1}" font-size="9" text-anchor="end">{val:.1}</text>"#,
+            r#"<text x="{tx:.1}" y="{ty:.1}" font-size="11" text-anchor="end">{val:.1}</text>"#,
             tx = ml - 4.0,
             ty = tick_y + 3.0,
         ));
@@ -467,7 +525,7 @@ pub fn scatter_svg(
         let tick_x = px(tick_val);
         let tick_label_y = mt + plot_h + 14.0;
         body.push_str(&format!(
-            r#"<text x="{tick_x:.1}" y="{tick_label_y:.1}" font-size="9" text-anchor="middle">{tick_val:.0}</text>"#,
+            r#"<text x="{tick_x:.1}" y="{tick_label_y:.1}" font-size="11" text-anchor="middle">{tick_val:.0}</text>"#,
         ));
     }
 
@@ -495,7 +553,7 @@ pub fn scatter_svg(
             .partial_cmp(&points[a].size)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let font9 = "9";
+    let font9 = "11";
     for &idx in indices.iter().take(5) {
         let p = &points[idx];
         let cx = px(p.x.clamp(x_min, x_max));
@@ -519,10 +577,10 @@ pub fn scatter_svg(
     let y_lab_x = 12.0;
     let y_lab_y = mt + plot_h / 2.0;
     body.push_str(&format!(
-        r#"<text x="{x_lab_x:.1}" y="{x_lab_y:.1}" font-size="10" text-anchor="middle">{x_label}</text>"#
+        r#"<text x="{x_lab_x:.1}" y="{x_lab_y:.1}" font-size="11" text-anchor="middle" class="axis-title chart-muted">{x_label}</text>"#
     ));
     body.push_str(&format!(
-        r#"<text x="{y_lab_x:.1}" y="{y_lab_y:.1}" font-size="10" text-anchor="middle" transform="rotate(-90 {y_lab_x:.1} {y_lab_y:.1})">{y_label}</text>"#
+        r#"<text x="{y_lab_x:.1}" y="{y_lab_y:.1}" font-size="11" text-anchor="middle" class="axis-title chart-muted" transform="rotate(-90 {y_lab_x:.1} {y_lab_y:.1})">{y_label}</text>"#
     ));
 
     format!(
@@ -559,7 +617,7 @@ pub fn calendar_heatmap_svg(days: &[CalendarDay], width: u32, height: u32) -> St
 
     // Weekday labels
     let labels = ["M", "T", "W", "T", "F"];
-    let font10 = "10";
+    let font10 = "11";
     for (r, lab) in labels.iter().enumerate() {
         let y = top_margin + r as f64 * (cell + gap) + cell / 2.0 + 4.0;
         body.push_str(&format!(
@@ -568,7 +626,7 @@ pub fn calendar_heatmap_svg(days: &[CalendarDay], width: u32, height: u32) -> St
     }
 
     // Cells
-    let critical_color = "#e03131";
+    let critical_color = "var(--ga-neg)";
     for (i, day) in days.iter().enumerate() {
         let row = day.weekday.min(4) as f64;
         let col = (i / 5) as f64;
@@ -577,10 +635,10 @@ pub fn calendar_heatmap_svg(days: &[CalendarDay], width: u32, height: u32) -> St
         let ry = top_margin + row * (cell + gap);
 
         let fill = match day.count {
-            0 => "#ebedf0",
-            1..=2 => "#9be9a8",
-            3..=5 => "#40c463",
-            _ => "#216e39",
+            0 => "var(--ga-cal-0)",
+            1..=2 => "var(--ga-cal-1)",
+            3..=5 => "var(--ga-cal-2)",
+            _ => "var(--ga-cal-3)",
         };
 
         let tooltip = if day.has_critical {
@@ -651,7 +709,7 @@ pub fn gauge_svg(value: f64, min: f64, max: f64, label: &str, risk_color: &str) 
         format!("M{x1:.1},{y1:.1} A{r},{r} 0 {large_arc} 1 {x2:.1},{y2:.1}")
     };
 
-    let bg_color = "#dee2e6";
+    let bg_color = "var(--ga-border)";
     let bg_path = arc_path(start_angle, end_angle);
     let mut body = format!(
         r#"<path d="{bg_path}" fill="none" stroke="{bg_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>"#
@@ -677,9 +735,8 @@ pub fn gauge_svg(value: f64, min: f64, max: f64, label: &str, risk_color: &str) 
 
     // Label
     let label_y = cy + 22.0;
-    let label_color = "#868e96";
     body.push_str(&format!(
-        r#"<text x="{cx}" y="{label_y:.1}" font-size="11" fill="{label_color}" text-anchor="middle">{label}</text>"#
+        r#"<text class="chart-muted" x="{cx}" y="{label_y:.1}" font-size="11" text-anchor="middle">{label}</text>"#
     ));
 
     let wi = w as u32;
@@ -735,7 +792,7 @@ pub fn donut_svg(slices: &[DonutSlice], width: u32, height: u32) -> String {
             or = outer_r,
         ));
         body.push_str(&format!(
-            r#"<circle cx="{cx:.1}" cy="{cy:.1}" r="{ir:.1}" fill="white"/>"#,
+            r#"<circle cx="{cx:.1}" cy="{cy:.1}" r="{ir:.1}" fill="var(--ga-bg)"/>"#,
             ir = inner_r,
         ));
         // Label
@@ -787,7 +844,7 @@ pub fn donut_svg(slices: &[DonutSlice], width: u32, height: u32) -> String {
                 let anchor = if lx > cx { "start" } else { "end" };
                 let lab = &s.label;
                 body.push_str(&format!(
-                    r#"<text x="{lx:.1}" y="{ly:.1}" font-size="10" text-anchor="{anchor}">{lab} {pct:.0}%</text>"#,
+                    r#"<text x="{lx:.1}" y="{ly:.1}" font-size="11" text-anchor="{anchor}">{lab} {pct:.0}%</text>"#,
                 ));
             }
 
@@ -815,36 +872,39 @@ pub fn donut_svg(slices: &[DonutSlice], width: u32, height: u32) -> String {
 
 // ── Correlation Matrix ───────────────────────────────────────────────────────
 
+/// Mix percentage of the end colour for |r|.
+///
+/// Weak cells (|r| < 0.5 as displayed) use 0-50% so `--ga-text` stays readable;
+/// strong cells jump to 75-100% so `--ga-on-strong` is readable. This keeps every
+/// cell out of the mid-luminance band where neither text colour reaches 4.5:1
+/// (verified for all four theme blocks in `tests/web_tokens.rs`).
+pub fn correlation_mix_pct(abs_r: f64) -> f64 {
+    let a = abs_r.clamp(0.0, 1.0);
+    if (a * 100.0).round() >= 50.0 {
+        (50.0 + a * 50.0).round()
+    } else {
+        (a * 100.0).round()
+    }
+}
+
 /// Interpolate a hex color for a correlation value in [-1, +1].
 ///
-/// Blue (#2166ac) at -1, white (#f7f7f7) at 0, red (#b2182b) at +1.
+/// `--ga-corr-neg` at -1 `--ga-corr-zero` at 0, `--ga-corr-pos` at +1; the
+/// result is a CSS `color-mix()` expression so it follows the active theme.
+/// Strength maps through [`correlation_mix_pct`].
 pub fn correlation_color(value: f64) -> String {
     let v = if value.is_finite() {
         value.clamp(-1.0, 1.0)
     } else {
         0.0
     };
-
-    let lerp =
-        |a: u8, b: u8, t: f64| -> u8 { (a as f64 + (b as f64 - a as f64) * t).round() as u8 };
-
-    let (r, g, b) = if v < 0.0 {
-        let t = v + 1.0; // 0..1 where 0 = -1, 1 = 0
-        (
-            lerp(0x21, 0xf7, t),
-            lerp(0x66, 0xf7, t),
-            lerp(0xac, 0xf7, t),
-        )
+    let end = if v < 0.0 {
+        "var(--ga-corr-neg)"
     } else {
-        let t = v; // 0..1 where 0 = 0, 1 = +1
-        (
-            lerp(0xf7, 0xb2, t),
-            lerp(0xf7, 0x18, t),
-            lerp(0xf7, 0x2b, t),
-        )
+        "var(--ga-corr-pos)"
     };
-
-    format!("#{r:02x}{g:02x}{b:02x}")
+    let pct = correlation_mix_pct(v.abs());
+    format!("color-mix(in srgb, {end} {pct:.0}%, var(--ga-corr-zero))")
 }
 
 /// Render a correlation matrix heatmap as an SVG string.
@@ -866,7 +926,7 @@ pub fn correlation_matrix_svg(
 
     let left_margin: f64 = 60.0;
     let top_margin: f64 = 60.0;
-    let avail_w = (width as f64 - left_margin - 10.0).max(1.0);
+    let avail_w = (width as f64 - left_margin - 30.0).max(1.0);
     let avail_h = (height as f64 - top_margin - 10.0).max(1.0);
     let cell_w = avail_w / n as f64;
     let cell_h = avail_h / n as f64;
@@ -878,7 +938,7 @@ pub fn correlation_matrix_svg(
         let x = left_margin + ci as f64 * cell_w + cell_w / 2.0;
         let y = top_margin - 6.0;
         body.push_str(&format!(
-            r#"<text x="{x:.1}" y="{y:.1}" font-size="10" text-anchor="end" transform="rotate(-45 {x:.1} {y:.1})">{ticker}</text>"#
+            r#"<text x="{x:.1}" y="{y:.1}" font-size="11" text-anchor="start" transform="rotate(-45 {x:.1} {y:.1})">{ticker}</text>"#
         ));
     }
 
@@ -887,7 +947,7 @@ pub fn correlation_matrix_svg(
         let x = left_margin - 4.0;
         let y = top_margin + ri as f64 * cell_h + cell_h / 2.0 + 4.0;
         body.push_str(&format!(
-            r#"<text x="{x:.1}" y="{y:.1}" font-size="10" text-anchor="end">{ticker}</text>"#
+            r#"<text x="{x:.1}" y="{y:.1}" font-size="11" text-anchor="end">{ticker}</text>"#
         ));
     }
 
@@ -904,7 +964,7 @@ pub fn correlation_matrix_svg(
             let rx = left_margin + ci as f64 * cell_w;
             let ry = top_margin + ri as f64 * cell_h;
 
-            let diag_stroke = r##"stroke="#333" stroke-width="2""##;
+            let diag_stroke = r#"stroke="var(--ga-text)" stroke-width="2""#;
             let stroke_attr = if ri == ci {
                 format!(" {diag_stroke}")
             } else {
@@ -920,8 +980,14 @@ pub fn correlation_matrix_svg(
             // Value text
             let tx = rx + cell_w / 2.0;
             let ty = ry + cell_h / 2.0 + 4.0;
+            // Cells at |r| >= 0.5 (as displayed) are saturated: use the on-strong text colour.
+            let class = if (val.abs() * 100.0).round() >= 50.0 {
+                r#" class="on-strong""#
+            } else {
+                ""
+            };
             body.push_str(&format!(
-                r#"<text x="{tx:.1}" y="{ty:.1}" font-size="9" text-anchor="middle">{val:.2}</text>"#,
+                r#"<text x="{tx:.1}" y="{ty:.1}" font-size="11" text-anchor="middle"{class}>{val:.2}</text>"#,
             ));
         }
     }
@@ -1000,7 +1066,7 @@ pub fn frontier_svg(
     let mut body = String::new();
 
     // Grid lines (4 horizontal, 4 vertical)
-    let grid_color = "#e9ecef";
+    let grid_color = "var(--ga-border)";
     for i in 0..=4 {
         let frac = i as f64 / 4.0;
         let gx = ml + frac * plot_w;
@@ -1030,7 +1096,7 @@ pub fn frontier_svg(
                 }
             })
             .collect();
-        let line_color = "#228be6";
+        let line_color = "var(--ga-series-1)";
         body.push_str(&format!(
             r#"<path d="{line_points}" fill="none" stroke="{line_color}" stroke-width="2"/>"#
         ));
@@ -1051,23 +1117,23 @@ pub fn frontier_svg(
             let tx = x + 8.0;
             let ty = y - 8.0;
             body.push_str(&format!(
-                r#"<text x="{tx:.1}" y="{ty:.1}" font-size="10" font-weight="bold">{lab}</text>"#,
+                r#"<text x="{tx:.1}" y="{ty:.1}" font-size="11" font-weight="bold">{lab}</text>"#,
             ));
         }
     }
 
     // Axis labels
-    let x_label = "Risk (Volatility %)";
-    let y_label = "Expected Return %";
+    let x_label = "Risk (%)";
+    let y_label = "Return (%)";
     let x_lab_x = ml + plot_w / 2.0;
     let x_lab_y = height as f64 - 5.0;
     let y_lab_x = 12.0;
     let y_lab_y = mt + plot_h / 2.0;
     body.push_str(&format!(
-        r#"<text x="{x_lab_x:.1}" y="{x_lab_y:.1}" font-size="10" text-anchor="middle">{x_label}</text>"#
+        r#"<text x="{x_lab_x:.1}" y="{x_lab_y:.1}" font-size="11" text-anchor="middle" class="axis-title chart-muted">{x_label}</text>"#
     ));
     body.push_str(&format!(
-        r#"<text x="{y_lab_x:.1}" y="{y_lab_y:.1}" font-size="10" text-anchor="middle" transform="rotate(-90 {y_lab_x:.1} {y_lab_y:.1})">{y_label}</text>"#
+        r#"<text x="{y_lab_x:.1}" y="{y_lab_y:.1}" font-size="11" text-anchor="middle" class="axis-title chart-muted" transform="rotate(-90 {y_lab_x:.1} {y_lab_y:.1})">{y_label}</text>"#
     ));
 
     format!(
@@ -1102,7 +1168,7 @@ fn format_dollars(v: f64) -> String {
 /// Render a fan chart (wealth projection) as an SVG string.
 ///
 /// Draws graduated area bands: p10-p90 (lightest), p25-p75 (medium), and
-/// p50 as a solid dark line. Uses graduated opacity of blue (#228be6).
+/// p50 as a solid dark line. Uses graduated opacity of `--ga-series-1`.
 pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> String {
     let ml: f64 = 70.0;
     let mr: f64 = 20.0;
@@ -1167,7 +1233,7 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
     };
 
     let mut body = String::new();
-    let blue = "#228be6";
+    let blue = "var(--ga-series-1)";
 
     // Helper to build an area band path between upper and lower series
     let band_path = |upper: &dyn Fn(usize) -> f64, lower: &dyn Fn(usize) -> f64| -> String {
@@ -1224,7 +1290,7 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
         let y = y_of(val);
         let label = format_dollars(val);
         body.push_str(&format!(
-            r#"<text x="{x:.1}" y="{y:.1}" font-size="9" text-anchor="end">{label}</text>"#,
+            r#"<text x="{x:.1}" y="{y:.1}" font-size="11" text-anchor="end">{label}</text>"#,
             x = ml - 4.0,
         ));
     }
@@ -1236,7 +1302,7 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
             let x = x_of(i);
             let y = height as f64 - 5.0;
             body.push_str(&format!(
-                r#"<text x="{x:.1}" y="{y:.1}" font-size="9" text-anchor="middle">{yr}</text>"#,
+                r#"<text x="{x:.1}" y="{y:.1}" font-size="11" text-anchor="middle">{yr}</text>"#,
                 yr = p.year,
             ));
         }
@@ -1301,7 +1367,7 @@ pub fn horizontal_bar_svg(bars: &[HBar], width: u32, height: u32) -> String {
 
         // Label on the left
         body.push_str(&format!(
-            r#"<text x="{lx:.1}" y="{ty:.1}" font-size="10" text-anchor="end">{lab}</text>"#,
+            r#"<text x="{lx:.1}" y="{ty:.1}" font-size="11" text-anchor="end">{lab}</text>"#,
             lx = left_margin - 4.0,
             ty = y + bar_h / 2.0 + 4.0,
         ));
@@ -1315,7 +1381,7 @@ pub fn horizontal_bar_svg(bars: &[HBar], width: u32, height: u32) -> String {
 
         // Value label
         body.push_str(&format!(
-            r#"<text x="{vx:.1}" y="{ty:.1}" font-size="9">{val:.1}</text>"#,
+            r#"<text x="{vx:.1}" y="{ty:.1}" font-size="11">{val:.1}</text>"#,
             vx = left_margin + bw + 4.0,
             ty = y + bar_h / 2.0 + 4.0,
             val = bar.value,
@@ -1369,8 +1435,8 @@ pub fn timeline_bar_svg(periods: &[TimelinePeriod], width: u32, height: u32) -> 
         .max(1.0);
 
     let mut body = String::new();
-    let target_color = "#dee2e6";
-    let executed_color = "#51cf66";
+    let target_color = "var(--ga-border)";
+    let executed_color = "var(--ga-pos)";
 
     for (i, period) in valid.iter().enumerate() {
         let y = top_margin + i as f64 * (bar_h + gap);
@@ -1380,7 +1446,7 @@ pub fn timeline_bar_svg(periods: &[TimelinePeriod], width: u32, height: u32) -> 
 
         // Period label
         body.push_str(&format!(
-            r#"<text x="{lx:.1}" y="{ty:.1}" font-size="10" text-anchor="end">{lab}</text>"#,
+            r#"<text x="{lx:.1}" y="{ty:.1}" font-size="11" text-anchor="end">{lab}</text>"#,
             lx = left_margin - 4.0,
             ty = y + bar_h / 2.0 + 4.0,
         ));
@@ -1407,7 +1473,7 @@ pub fn timeline_bar_svg(periods: &[TimelinePeriod], width: u32, height: u32) -> 
         };
         let bar_end = left_margin + tw.max(ew);
         body.push_str(&format!(
-            r#"<text x="{vx:.1}" y="{ty:.1}" font-size="9">{pct:.0}%</text>"#,
+            r#"<text x="{vx:.1}" y="{ty:.1}" font-size="11">{pct:.0}%</text>"#,
             vx = bar_end + 4.0,
             ty = y + bar_h / 2.0 + 4.0,
         ));
@@ -1477,7 +1543,7 @@ pub fn concentration_decay_points(
     let eff_n = if hhi > 0.0 { 1.0 / hhi } else { 100.0 };
 
     points.push(ConcentrationPoint {
-        quarter_label: format!("{} Q0", start_year),
+        quarter_label: "Start".to_string(),
         concentrated_weight: weight,
         hhi,
         estimated_annual_vol: interpolate_vol(eff_n),
@@ -1509,14 +1575,14 @@ pub fn concentration_decay_svg(points: &[ConcentrationPoint], width: u32, height
     if points.is_empty() {
         return format!(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\">\
-             <text x=\"50%\" y=\"50%\" text-anchor=\"middle\" fill=\"#888\" font-size=\"14\">No data</text></svg>"
+             <text class=\"chart-muted\" x=\"50%\" y=\"50%\" text-anchor=\"middle\" font-size=\"14\">No data</text></svg>"
         );
     }
 
     let pad_l = 60.0_f64;
     let pad_r = 20.0;
     let pad_t = 30.0;
-    let pad_b = 50.0;
+    let pad_b = 56.0;
     let w = width as f64 - pad_l - pad_r;
     let h = height as f64 - pad_t - pad_b;
 
@@ -1529,13 +1595,9 @@ pub fn concentration_decay_svg(points: &[ConcentrationPoint], width: u32, height
 
     let mut body = String::new();
 
-    body.push_str(&format!(
-        "<rect width=\"{width}\" height=\"{height}\" fill=\"#1a1a2e\"/>"
-    ));
-
     let cx = width as f64 / 2.0;
     body.push_str(&format!(
-        "<text x=\"{cx:.1}\" y=\"18\" fill=\"#ddd\" font-size=\"13\" text-anchor=\"middle\">Portfolio Volatility Decay</text>"
+        "<text x=\"{cx:.1}\" y=\"18\" font-size=\"13\" text-anchor=\"middle\">Portfolio Volatility Decay</text>"
     ));
 
     let mut path = String::new();
@@ -1557,38 +1619,41 @@ pub fn concentration_decay_svg(points: &[ConcentrationPoint], width: u32, height
     area.push_str(&format!(" L{close_x:.1},{close_y:.1} Z"));
 
     body.push_str(&format!(
-        "<path d=\"{area}\" fill=\"rgba(99,102,241,0.2)\"/>"
+        "<path d=\"{area}\" fill=\"var(--ga-series-1)\" fill-opacity=\"0.2\"/>"
     ));
     body.push_str(&format!(
-        "<path d=\"{path}\" fill=\"none\" stroke=\"#6366f1\" stroke-width=\"2.5\"/>"
+        "<path d=\"{path}\" fill=\"none\" stroke=\"var(--ga-series-1)\" stroke-width=\"2.5\"/>"
     ));
 
     for (i, p) in points.iter().enumerate() {
         let x = pad_l + (i as f64 / (n - 1.0).max(1.0)) * w;
         let y = pad_t + h - (p.estimated_annual_vol / max_vol) * h;
         body.push_str(&format!(
-            "<circle cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"3.5\" fill=\"#6366f1\"/>"
+            "<circle cx=\"{x:.1}\" cy=\"{y:.1}\" r=\"3.5\" fill=\"var(--ga-series-1)\"/>"
         ));
         if i % 2 == 0 || i == points.len() - 1 {
             let ly = y - 8.0;
             let vol = p.estimated_annual_vol;
             body.push_str(&format!(
-                "<text x=\"{x:.1}\" y=\"{ly:.1}\" fill=\"#aaa\" font-size=\"10\" text-anchor=\"middle\">{vol:.1}%</text>"
+                "<text x=\"{x:.1}\" y=\"{ly:.1}\" font-size=\"11\" text-anchor=\"middle\">{vol:.1}%</text>"
             ));
-        }
-        if i % 2 == 0 || i == points.len() - 1 {
             let label_y = pad_t + h + 15.0;
             body.push_str(&format!(
-                "<text x=\"{x:.1}\" y=\"{label_y:.1}\" fill=\"#888\" font-size=\"9\" text-anchor=\"middle\">{}</text>",
-                p.quarter_label
+                "<text class=\"chart-muted\" x=\"{x:.1}\" y=\"{label_y:.1}\" font-size=\"11\" text-anchor=\"middle\">{}</text>",
+                svg_escape(&p.quarter_label)
             ));
         }
     }
 
     let mid_y = pad_t + h / 2.0;
     body.push_str(&format!(
-        "<text x=\"15\" y=\"{mid_y:.1}\" fill=\"#888\" font-size=\"10\" \
-         transform=\"rotate(-90,15,{mid_y:.1})\" text-anchor=\"middle\">Annual Vol %</text>"
+        "<text class=\"axis-title chart-muted\" x=\"15\" y=\"{mid_y:.1}\" font-size=\"11\" \
+         transform=\"rotate(-90,15,{mid_y:.1})\" text-anchor=\"middle\">Annual volatility (%)</text>"
+    ));
+    let x_title_y = height as f64 - 6.0;
+    body.push_str(&format!(
+        "<text class=\"axis-title chart-muted\" x=\"{cx:.1}\" y=\"{x_title_y:.1}\" font-size=\"11\" \
+         text-anchor=\"middle\">Time (years)</text>"
     ));
 
     format!(
@@ -1683,9 +1748,12 @@ mod tests {
         ];
         let svg = regime_timeline_svg(&entries, 300, 30);
         assert_valid_svg(&svg);
-        assert!(svg.contains("#51cf66"), "Bull should be green");
-        assert!(svg.contains("#ff6b6b"), "Bear should be red");
-        assert!(svg.contains("#ffd43b"), "Sideways should be yellow");
+        assert!(svg.contains("var(--ga-pos)"), "Bull should be green");
+        assert!(svg.contains("var(--ga-neg)"), "Bear should be red");
+        assert!(
+            svg.contains("var(--ga-heat-3)"),
+            "Sideways should be yellow"
+        );
     }
 
     // ── sparkline_svg ────────────────────────────────────────────────────────
@@ -1749,7 +1817,10 @@ mod tests {
         let svg = heatmap_svg(&data, &["NVDA"], &["03/05"], 200, 100, score_color);
         assert_valid_svg(&svg);
         assert!(svg.contains("<rect"), "single cell should produce a rect");
-        assert!(svg.contains("#2b8a3e"), "score 95 should map to dark green");
+        assert!(
+            svg.contains("var(--ga-heat-5)"),
+            "score 95 should map to dark green"
+        );
         assert!(svg.contains("<title>"), "cell should have a tooltip");
     }
 
@@ -1758,7 +1829,10 @@ mod tests {
         let data = vec![vec![None]];
         let svg = heatmap_svg(&data, &["AAPL"], &["03/06"], 200, 100, score_color);
         assert_valid_svg(&svg);
-        assert!(svg.contains("#dee2e6"), "missing cell should use gray fill");
+        assert!(
+            svg.contains("var(--ga-heat-missing)"),
+            "missing cell should use gray fill"
+        );
     }
 
     #[test]
@@ -1797,10 +1871,10 @@ mod tests {
         assert!(svg.contains("NVDA"), "should have ticker labels");
         assert!(svg.contains("03/05"), "should have date labels");
         // score 92 -> dark green, 45 -> orange, 25 -> red, 75 -> green
-        assert!(svg.contains("#2b8a3e"), "score 92 = dark green");
-        assert!(svg.contains("#fd7e14"), "score 45 = orange");
-        assert!(svg.contains("#e03131"), "score 25 = red");
-        assert!(svg.contains("#51cf66"), "score 75 = green");
+        assert!(svg.contains("var(--ga-heat-5)"), "score 92 = dark green");
+        assert!(svg.contains("var(--ga-heat-2)"), "score 45 = orange");
+        assert!(svg.contains("var(--ga-heat-1)"), "score 25 = red");
+        assert!(svg.contains("var(--ga-heat-4)"), "score 75 = green");
     }
 
     #[test]
@@ -1821,28 +1895,31 @@ mod tests {
         })]];
         let svg = heatmap_svg(&data, &["T"], &["d1"], 200, 100, sentiment_color);
         assert_valid_svg(&svg);
-        assert!(svg.contains("#2b8a3e"), "sentiment 15 should be dark green");
+        assert!(
+            svg.contains("var(--ga-heat-5)"),
+            "sentiment 15 should be dark green"
+        );
     }
 
     // ── score_color / sentiment_color ──────────────────────────────────────
 
     #[test]
     fn score_color_thresholds() {
-        assert_eq!(score_color(95.0), "#2b8a3e");
-        assert_eq!(score_color(90.0), "#2b8a3e");
-        assert_eq!(score_color(80.0), "#51cf66");
-        assert_eq!(score_color(50.0), "#ffd43b");
-        assert_eq!(score_color(30.0), "#fd7e14");
-        assert_eq!(score_color(10.0), "#e03131");
+        assert_eq!(score_color(95.0), "var(--ga-heat-5)");
+        assert_eq!(score_color(90.0), "var(--ga-heat-5)");
+        assert_eq!(score_color(80.0), "var(--ga-heat-4)");
+        assert_eq!(score_color(50.0), "var(--ga-heat-3)");
+        assert_eq!(score_color(30.0), "var(--ga-heat-2)");
+        assert_eq!(score_color(10.0), "var(--ga-heat-1)");
     }
 
     #[test]
     fn sentiment_color_thresholds() {
-        assert_eq!(sentiment_color(15.0), "#2b8a3e");
-        assert_eq!(sentiment_color(10.0), "#51cf66");
-        assert_eq!(sentiment_color(7.0), "#adb5bd");
-        assert_eq!(sentiment_color(4.0), "#fd7e14");
-        assert_eq!(sentiment_color(1.0), "#e03131");
+        assert_eq!(sentiment_color(15.0), "var(--ga-heat-5)");
+        assert_eq!(sentiment_color(10.0), "var(--ga-heat-4)");
+        assert_eq!(sentiment_color(7.0), "var(--ga-heat-neutral)");
+        assert_eq!(sentiment_color(4.0), "var(--ga-heat-2)");
+        assert_eq!(sentiment_color(1.0), "var(--ga-heat-1)");
     }
 
     // ── stacked_area_svg ───────────────────────────────────────────────────
@@ -2058,7 +2135,10 @@ mod tests {
         let svg = calendar_heatmap_svg(&days, 400, 120);
         assert_valid_svg(&svg);
         assert!(svg.contains("<rect"), "should render a cell rect");
-        assert!(svg.contains("#9be9a8"), "count 2 should be light green");
+        assert!(
+            svg.contains("var(--ga-cal-1)"),
+            "count 2 should be light green"
+        );
         assert!(svg.contains("2026-03-05"), "tooltip should contain date");
     }
 
@@ -2076,7 +2156,10 @@ mod tests {
             svg.contains("<circle"),
             "critical day should have circle overlay"
         );
-        assert!(svg.contains("#e03131"), "critical circle should be red");
+        assert!(
+            svg.contains("var(--ga-neg)"),
+            "critical circle should be red"
+        );
         assert!(svg.contains("critical"), "tooltip should mention critical");
     }
 
@@ -2110,10 +2193,10 @@ mod tests {
         ];
         let svg = calendar_heatmap_svg(&days, 400, 120);
         assert_valid_svg(&svg);
-        assert!(svg.contains("#ebedf0"), "count 0 -> lightest");
-        assert!(svg.contains("#9be9a8"), "count 1 -> light green");
-        assert!(svg.contains("#40c463"), "count 4 -> medium green");
-        assert!(svg.contains("#216e39"), "count 8 -> dark green");
+        assert!(svg.contains("var(--ga-cal-0)"), "count 0 -> lightest");
+        assert!(svg.contains("var(--ga-cal-1)"), "count 1 -> light green");
+        assert!(svg.contains("var(--ga-cal-2)"), "count 4 -> medium green");
+        assert!(svg.contains("var(--ga-cal-3)"), "count 8 -> dark green");
     }
 
     #[test]
@@ -2147,7 +2230,10 @@ mod tests {
         let svg = gauge_svg(0.0, 0.0, 100.0, "Min", "#aaa");
         assert_valid_svg(&svg);
         // Background arc should be present but value arc may be absent
-        assert!(svg.contains("#dee2e6"), "should have background arc");
+        assert!(
+            svg.contains("var(--ga-border)"),
+            "should have background arc"
+        );
     }
 
     #[test]
@@ -2209,49 +2295,61 @@ mod tests {
     fn sentiment_color_normalized_thresholds() {
         assert_eq!(
             sentiment_color_normalized(90.0),
-            "#2b8a3e",
+            "var(--ga-heat-5)",
             ">=80 -> dark green"
         );
         assert_eq!(
             sentiment_color_normalized(80.0),
-            "#2b8a3e",
+            "var(--ga-heat-5)",
             "80 boundary -> dark green"
         );
         assert_eq!(
             sentiment_color_normalized(70.0),
-            "#51cf66",
+            "var(--ga-heat-4)",
             ">=60 -> light green"
         );
         assert_eq!(
             sentiment_color_normalized(60.0),
-            "#51cf66",
+            "var(--ga-heat-4)",
             "60 boundary -> light green"
         );
-        assert_eq!(sentiment_color_normalized(50.0), "#adb5bd", ">=40 -> gray");
+        assert_eq!(
+            sentiment_color_normalized(50.0),
+            "var(--ga-heat-neutral)",
+            ">=40 -> gray"
+        );
         assert_eq!(
             sentiment_color_normalized(40.0),
-            "#adb5bd",
+            "var(--ga-heat-neutral)",
             "40 boundary -> gray"
         );
         assert_eq!(
             sentiment_color_normalized(30.0),
-            "#fd7e14",
+            "var(--ga-heat-2)",
             ">=20 -> orange"
         );
         assert_eq!(
             sentiment_color_normalized(20.0),
-            "#fd7e14",
+            "var(--ga-heat-2)",
             "20 boundary -> orange"
         );
-        assert_eq!(sentiment_color_normalized(10.0), "#e03131", "<20 -> red");
-        assert_eq!(sentiment_color_normalized(0.0), "#e03131", "0 -> red");
+        assert_eq!(
+            sentiment_color_normalized(10.0),
+            "var(--ga-heat-1)",
+            "<20 -> red"
+        );
+        assert_eq!(
+            sentiment_color_normalized(0.0),
+            "var(--ga-heat-1)",
+            "0 -> red"
+        );
     }
 
     #[test]
     fn sentiment_color_normalized_extreme_values() {
-        assert_eq!(sentiment_color_normalized(100.0), "#2b8a3e");
-        assert_eq!(sentiment_color_normalized(-5.0), "#e03131");
-        assert_eq!(sentiment_color_normalized(150.0), "#2b8a3e");
+        assert_eq!(sentiment_color_normalized(100.0), "var(--ga-heat-5)");
+        assert_eq!(sentiment_color_normalized(-5.0), "var(--ga-heat-1)");
+        assert_eq!(sentiment_color_normalized(150.0), "var(--ga-heat-5)");
     }
 
     // ── scatter_svg grid lines ────────────────────────────────────────────
@@ -2458,35 +2556,45 @@ mod tests {
     #[test]
     fn correlation_color_extremes() {
         let neg1 = correlation_color(-1.0);
-        assert_eq!(neg1, "#2166ac", "correlation -1 should be blue");
+        assert_eq!(
+            neg1,
+            "color-mix(in srgb, var(--ga-corr-neg) 100%, var(--ga-corr-zero))"
+        );
 
         let zero = correlation_color(0.0);
-        assert_eq!(zero, "#f7f7f7", "correlation 0 should be white");
+        assert_eq!(
+            zero,
+            "color-mix(in srgb, var(--ga-corr-pos) 0%, var(--ga-corr-zero))"
+        );
 
         let pos1 = correlation_color(1.0);
-        assert_eq!(pos1, "#b2182b", "correlation +1 should be red");
+        assert_eq!(
+            pos1,
+            "color-mix(in srgb, var(--ga-corr-pos) 100%, var(--ga-corr-zero))"
+        );
     }
 
     #[test]
     fn correlation_color_midpoints() {
         let neg_half = correlation_color(-0.5);
         // Should be between blue and white
-        assert!(neg_half.starts_with('#'), "should be a hex color");
-        assert_ne!(neg_half, "#2166ac", "should not be pure blue");
-        assert_ne!(neg_half, "#f7f7f7", "should not be pure white");
+        assert!(neg_half.contains("var(--ga-corr-neg) 75%"), "{neg_half}");
+        assert_ne!(neg_half, correlation_color(-1.0), "should not be pure blue");
+        assert_ne!(neg_half, correlation_color(0.0), "should not be pure white");
 
         let pos_half = correlation_color(0.5);
-        assert!(pos_half.starts_with('#'), "should be a hex color");
-        assert_ne!(pos_half, "#f7f7f7", "should not be pure white");
-        assert_ne!(pos_half, "#b2182b", "should not be pure red");
+        assert!(pos_half.contains("var(--ga-corr-pos) 75%"), "{pos_half}");
+        assert_ne!(pos_half, correlation_color(0.0), "should not be pure white");
+        assert_ne!(pos_half, correlation_color(1.0), "should not be pure red");
     }
 
     #[test]
     fn correlation_color_nan_defaults_white() {
         let nan_color = correlation_color(f64::NAN);
         assert_eq!(
-            nan_color, "#f7f7f7",
-            "NaN correlation should map to white (0)"
+            nan_color,
+            correlation_color(0.0),
+            "NaN correlation should map to the neutral mid colour (0)"
         );
     }
 
@@ -2520,7 +2628,7 @@ mod tests {
         assert!(svg.contains("1.00"), "diagonal should show 1.00");
         assert!(svg.contains("AAPL"), "should show ticker label");
         // Diagonal cell should have stroke
-        let diag_marker = r##"stroke="#333""##;
+        let diag_marker = r#"stroke="var(--ga-text)""#;
         assert!(svg.contains(diag_marker), "diagonal should be highlighted");
     }
 
@@ -2553,7 +2661,7 @@ mod tests {
         assert_valid_svg(&svg);
         // The -0.9 cells should be blueish, the diagonal (1.0) should be reddish
         // Just verify we get distinct fills
-        let fill_count = svg.matches("fill=\"#").count();
+        let fill_count = svg.matches("fill=\"color-mix").count();
         assert!(fill_count >= 4, "should have fill colors on all cells");
     }
 
@@ -2582,14 +2690,8 @@ mod tests {
         assert_valid_svg(&svg);
         assert!(svg.contains("<circle"), "should have a point circle");
         assert!(svg.contains("Min Var"), "should show highlighted label");
-        assert!(
-            svg.contains("Risk (Volatility %)"),
-            "should have x-axis label"
-        );
-        assert!(
-            svg.contains("Expected Return %"),
-            "should have y-axis label"
-        );
+        assert!(svg.contains("Risk (%)"), "should have x-axis label");
+        assert!(svg.contains("Return (%)"), "should have y-axis label");
     }
 
     #[test]
@@ -2786,7 +2888,7 @@ mod tests {
             svg.contains("opacity=\"0.3\""),
             "inner band should have medium opacity"
         );
-        assert!(svg.contains("#228be6"), "should use blue color");
+        assert!(svg.contains("var(--ga-series-1)"), "should use blue color");
     }
 
     #[test]
@@ -2986,8 +3088,14 @@ mod tests {
         // Should have 2 rects: target (gray) + executed (green)
         let rect_count = svg.matches("<rect").count();
         assert_eq!(rect_count, 2, "should have target + executed rects");
-        assert!(svg.contains("#dee2e6"), "should have gray target bar");
-        assert!(svg.contains("#51cf66"), "should have green executed bar");
+        assert!(
+            svg.contains("var(--ga-border)"),
+            "should have gray target bar"
+        );
+        assert!(
+            svg.contains("var(--ga-pos)"),
+            "should have green executed bar"
+        );
         assert!(svg.contains("75%"), "should show 75% completion");
     }
 

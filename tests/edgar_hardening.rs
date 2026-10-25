@@ -75,18 +75,35 @@ impl Env {
         }
     }
 
+    /// No retries: tests that assert exact request counts must not be perturbed by a
+    /// transient connection error being silently retried (flaky on Linux CI).
     fn client_in(&self, cache: &std::path::Path, ttl: u64) -> EdgarClient {
+        let mut c = client_config(cache, ttl);
+        c.max_retries = 0;
+        EdgarClient::new(c)
+            .unwrap()
+            .with_base_urls(self.data.uri(), self.www.uri())
+    }
+
+    /// Same as `client_in` but with one retry, for tests that exercise retry behaviour.
+    fn client_in_retrying(&self, cache: &std::path::Path, ttl: u64) -> EdgarClient {
         client_for(&self.data.uri(), &self.www.uri(), cache, ttl)
     }
 }
 
-fn client_for(data: &str, www: &str, cache: &std::path::Path, ttl: u64) -> EdgarClient {
+fn client_config(cache: &std::path::Path, ttl: u64) -> EdgarConfig {
     let mut c = EdgarConfig::new(UA, cache.join("c"));
     c.requests_per_second = 1000;
     c.retry_base_delay_ms = 1;
     c.max_retries = 1;
     c.cache_ttl_hours = ttl;
-    EdgarClient::new(c).unwrap().with_base_urls(data, www)
+    c
+}
+
+fn client_for(data: &str, www: &str, cache: &std::path::Path, ttl: u64) -> EdgarClient {
+    EdgarClient::new(client_config(cache, ttl))
+        .unwrap()
+        .with_base_urls(data, www)
 }
 
 async fn hits(s: &MockServer, p: &str) -> usize {
@@ -154,7 +171,10 @@ async fn test_retry_when_429_has_retry_after_should_wait_at_least_that_long() {
         .await;
     let tmp = TempDir::new().unwrap();
     let t = Instant::now();
-    let f = e.client_in(tmp.path(), 24).company_facts("999999").await;
+    let f = e
+        .client_in_retrying(tmp.path(), 24)
+        .company_facts("999999")
+        .await;
     assert!(f.is_ok(), "{f:?}");
     assert!(
         t.elapsed() >= Duration::from_millis(1000),

@@ -537,7 +537,8 @@ async fn test_nav_js_when_shell_rendered_should_be_versioned_deferred_and_detail
         .into_iter()
         .find(|s| s.contains("/static/nav.js"))
         .expect("nav.js script tag");
-    assert!(script.contains("defer"));
+    // batch 2: nav.js is loaded synchronously after the menu (see web_batch2.rs)
+    assert!(!script.contains("defer"));
     assert!(attr(&script, "src")
         .unwrap()
         .starts_with("/static/nav.js?v="));

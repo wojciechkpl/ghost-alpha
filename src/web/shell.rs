@@ -3,7 +3,13 @@
 //! Every full page is rendered through [`shell`]; there is exactly one copy of
 //! the navigation ([`NAV`]) so pages can never drift apart.
 
+use axum::response::Html;
+use chrono::{NaiveDate, Utc};
+
 use super::assets::versioned;
+use super::freshness;
+use super::AppState;
+use crate::storage::db::Repository;
 
 /// One navigation link.
 pub struct NavItem {
@@ -106,20 +112,31 @@ fn render_nav(active: &str) -> String {
     out
 }
 
-/// Wrap `body` in the full HTML document.
+/// Wrap `body` in the full HTML document, with a "No data" freshness chip.
 ///
 /// `active` is the route path of the current page; the matching nav link gets
 /// `aria-current="page"`. `title` is HTML-escaped and rendered as the page's
 /// single `<h1>`; `body` must not contain another `<h1>`.
+///
+/// Pages that know the data age use [`page`] instead, which looks up the
+/// newest screen run and renders the real chip.
 pub fn shell(active: &str, title: &str, body: &str) -> String {
+    let chip = freshness::chip_html(None, Utc::now().date_naive());
+    shell_with_chip(&chip, active, title, body)
+}
+
+/// Same as [`shell`] with a pre-rendered freshness chip (pure: no I/O).
+pub fn shell_with_chip(chip: &str, active: &str, title: &str, body: &str) -> String {
     let title = html_escape(title);
     let nav = render_nav(active);
-    let (pico, tokens, css, htmx, navjs) = (
+    let (pico, tokens, css, htmx, navjs, statusjs, tablejs) = (
         versioned("pico.min.css"),
         versioned("tokens.css"),
         versioned("ghost-alpha.css"),
         versioned("htmx.min.js"),
         versioned("nav.js"),
+        versioned("status.js"),
+        versioned("table.js"),
     );
     format!(
         r##"<!DOCTYPE html>
@@ -132,16 +149,18 @@ pub fn shell(active: &str, title: &str, body: &str) -> String {
   <link rel="stylesheet" href="{tokens}">
   <link rel="stylesheet" href="{css}">
   <script src="{htmx}" defer></script>
-  <script src="{navjs}" defer></script>
+  <script src="{statusjs}" defer></script>
+  <script src="{tablejs}" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <header class="container site-header"><strong class="brand">Ghost Alpha</strong></header>
+  <header class="container site-header"><strong class="brand">Ghost Alpha</strong>{chip}</header>
   <nav class="container site-nav" aria-label="Main">
     <details class="nav-menu" open>
       <summary>Menu</summary>
       <div class="nav-groups">{nav}</div>
     </details>
+    <script src="{navjs}"></script>
   </nav>
   <main id="main-content" class="container">
     <h1>{title}</h1>
@@ -150,4 +169,59 @@ pub fn shell(active: &str, title: &str, body: &str) -> String {
 </body>
 </html>"##
     )
+}
+
+/// Render a full page including the real freshness chip (newest screen run).
+pub async fn page(state: &AppState, active: &str, title: &str, body: &str) -> Html<String> {
+    let repo = state.repo.clone();
+    let latest = match tokio::task::spawn_blocking(move || repo.latest_screen_date()).await {
+        Ok(Ok(date)) => date,
+        Ok(Err(e)) => {
+            tracing::warn!("freshness chip: reading the latest screen date failed: {e}");
+            None
+        }
+        Err(e) => {
+            tracing::warn!("freshness chip: lookup task failed: {e}");
+            None
+        }
+    }
+    .and_then(|d| NaiveDate::parse_from_str(&d, "%Y-%m-%d").ok());
+    let chip = freshness::chip_html(latest, Utc::now().date_naive());
+    Html(shell_with_chip(&chip, active, title, body))
+}
+
+/// Banner for pages driven by built-in sample inputs rather than the user's data.
+pub fn illustrative_banner() -> &'static str {
+    r#"<aside class="banner banner-illustrative" role="note"><strong>Illustrative inputs.</strong> This page uses built-in sample figures, not your holdings. <a href="/portfolio">Import your positions</a> to see your own numbers.</aside>
+"#
+}
+
+/// "Table view" fallback for a chart: a collapsed `<details>` holding the
+/// plotted numbers as a captioned table. All cell text is escaped.
+pub fn table_view<H: AsRef<str>, C: AsRef<str>>(
+    caption: &str,
+    headers: &[H],
+    rows: &[Vec<C>],
+) -> String {
+    let mut out = String::with_capacity(256 + rows.len() * 64);
+    out.push_str(r#"<details class="table-view"><summary>Table view</summary><div class="table-wrap"><table><caption class="sr-only">"#);
+    out.push_str(&html_escape(caption));
+    out.push_str("</caption><thead><tr>");
+    for h in headers {
+        out.push_str(r#"<th scope="col">"#);
+        out.push_str(&html_escape(h.as_ref()));
+        out.push_str("</th>");
+    }
+    out.push_str("</tr></thead><tbody>");
+    for row in rows {
+        out.push_str("<tr>");
+        for c in row {
+            out.push_str("<td>");
+            out.push_str(&html_escape(c.as_ref()));
+            out.push_str("</td>");
+        }
+        out.push_str("</tr>");
+    }
+    out.push_str("</tbody></table></div></details>");
+    out
 }
