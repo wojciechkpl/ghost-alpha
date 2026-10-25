@@ -792,6 +792,7 @@ For detailed setup including Telegram alerts, Discord webhooks, AI agent integra
 | `plan` | End-to-end forward-NAV pipeline: Fidelity CSVs → MC → CSV + audit JSON | `src/cli/plan.rs` → `run_plan_pipeline` |
 | `plan --treatment hold\|sell-reinvest\|option-b` | Choose RSU treatment for the projection | `src/projection/portfolio_nav.rs` |
 | `plan --paths N --seed N` | Configure MC paths and seed (default 5000 paths, seed 42; reproducible) | `src/projection/monte_carlo.rs` |
+| `edgar facts\|filings <TICKER>` | SEC EDGAR point-in-time XBRL facts and filing lists (free, needs a User-Agent) | `src/cli/edgar.rs` |
 | `allocate` | Show target fund allocation for a risk profile and brokerage | `src/main.rs` → `Commands::Allocate` |
 | `size` | Recommend position sizes for screening results | `src/main.rs` → `Commands::Size` |
 | `size --portfolio 150000` | Compute sizes for a specific portfolio value | `src/portfolio/sizing.rs` |
@@ -803,6 +804,34 @@ For detailed setup including Telegram alerts, Discord webhooks, AI agent integra
 | `geo-risk` | Compute geopolitical risk score from market inputs | `src/main.rs` → `Commands::GeoRisk` |
 | `div-report` | Generate self-contained HTML diversification report | `src/main.rs` → `Commands::DivReport` |
 | `alerts` | Show recent alerts from the alert log | `src/main.rs` → `Commands::Alerts` |
+
+### SEC EDGAR (`ghost-alpha edgar`)
+
+Free, key-less access to SEC filings data. `edgar facts` prints XBRL values as they were known on a
+given date (`--as-of`), so restated figures never leak into the past; `edgar filings` lists filings
+filtered by form, 8-K item and date. No `config.toml` or Finnhub key is required.
+
+SEC blocks anonymous clients: provide a User-Agent of the form `<app or name> <contact email>`
+via `GHOST_ALPHA_EDGAR_USER_AGENT` (or `[edgar] user_agent` in `config.toml`). Responses are cached for
+24h under your user cache directory (`GHOST_ALPHA_EDGAR_CACHE_DIR` to override).
+
+Things to know:
+- `--as-of` is inclusive of the filing date. For close-to-close backtests, pass the previous trading
+  day so a filing made after the close is not visible.
+- `edgar filings` searches only SEC's `recent` list (roughly the latest 1000 filings) unless `--since`
+  is given; with `--since DATE` older archive pages reaching back to DATE are fetched (and cached).
+  Without `--since`, a stderr note says when older filings exist.
+- Concept names vary: since ASC 606 many filers report revenue as
+  `RevenueFromContractWithCustomerExcludingAssessedTax` rather than `Revenues`. When a concept or unit
+  is not found, stderr lists similar concepts / available units.
+- Annual series only include ~12-month periods and quarterly series only ~3-month periods, so
+  year-to-date and Q4 slices do not pollute them.
+
+```bash
+export GHOST_ALPHA_EDGAR_USER_AGENT="Jane Doe jane@example.com"
+ghost-alpha edgar facts AAPL --concept RevenueFromContractWithCustomerExcludingAssessedTax --as-of 2024-03-01 --format json
+ghost-alpha edgar filings AAPL --form 8-K --item 2.02 --since 2024-01-01
+```
 
 Global flags: `-c <path>` (config file), `-v` (verbose logging), `--fixed-weights` (disable adaptive engine).
 

@@ -157,6 +157,7 @@ mod tests {
             plugins: PluginsConfig::default(),
             cache: Default::default(),
             universe: Vec::new(),
+            edgar: None,
         };
         AppState {
             repo: Arc::new(repo),

@@ -1,0 +1,65 @@
+{
+ "cik": "999999",
+ "name": "Example Corp",
+ "tickers": [
+  "EXMP"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0000999999-24-000012",
+    "0000999999-24-000011",
+    "0000999999-23-000041"
+   ],
+   "filingDate": [
+    "2024-02-20",
+    "2024-02-20",
+    "2023-11-03"
+   ],
+   "reportDate": [
+    "2023-12-31",
+    "2024-02-20",
+    "2023-11-03"
+   ],
+   "acceptanceDateTime": [
+    "2024-02-20T16:05:00.000Z",
+    "2024-02-20T16:05:00.000Z",
+    "2023-11-03T16:05:00.000Z"
+   ],
+   "form": [
+    "10-K",
+    "8-K",
+    "8-K"
+   ],
+   "items": [
+    "",
+    "2.02,9.01",
+    "2.02,9.01"
+   ],
+   "primaryDocument": [
+    "exmp-20231231.htm",
+    "exmp-8k_20240220.htm",
+    "exmp-8k_20231103.htm"
+   ],
+   "primaryDocDescription": [
+    "10-K",
+    "8-K",
+    "8-K"
+   ]
+  },
+  "files": [
+   {
+    "name": "CIK0000999999-submissions-001.json",
+    "filingCount": 3,
+    "filingFrom": "2019-05-02",
+    "filingTo": "2021-11-04"
+   },
+   {
+    "name": "CIK0000999999-submissions-002.json",
+    "filingCount": 2,
+    "filingFrom": "2012-03-01",
+    "filingTo": "2018-11-01"
+   }
+  ]
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "0": {
+  "cik_str": 999999,
+  "ticker": "EXMP",
+  "title": "Example Corp"
+ },
+ "1": {
+  "cik_str": 999998,
+  "ticker": "EXMA",
+  "title": "Example Alpha Inc."
+ },
+ "2": {
+  "cik_str": 123456,
+  "ticker": "ZZZZ",
+  "title": "Zed Holdings (fictional)"
+ },
+ "3": {
+  "cik_str": 42,
+  "ticker": "TINY",
+  "title": "Tiny Fictional Co"
+ }
+}
