@@ -4,6 +4,13 @@ All notable changes to GhostAlpha are documented in this file.
 
 ## [Unreleased] — v2.0
 
+### Web dashboard: shared shell, accessibility and hardening
+- **Changed:** every page renders through one shell (`web::shell`) with a single navigation grouped into Portfolio, Markets, Research, Tools and System; `/concentration-decay` is now reachable from the nav; the menu collapses on small screens
+- **New:** `tokens.css` light/dark colour tokens (also driving Pico), with WCAG contrast checked in tests; status badges pair colour with an icon
+- **Changed:** accessibility: skip link, landmarks, one `<h1>` per page without skipped heading levels, informative table captions with `scope` on headers, 24px minimum targets, screen-reader announcements only for user-triggered updates
+- **Changed:** security and caching: Content-Security-Policy, `nosniff` and `Referrer-Policy` on every response, gzip compression, permissive CORS removed, content-hashed static URLs (`?v=`) served immutable, weak ETags with 304s
+- **Fixed:** the home screen's 60-second refresh no longer resets a chosen past date
+
 ### SEC EDGAR client
 - **New:** `ghost-alpha edgar facts <TICKER>`: point-in-time XBRL company facts. Annual (335-395 day) and quarterly (61-121 day) series; restatements and amendments appear only from their filing date (`--as-of`, inclusive); START and FILING FY/FP columns; stderr hints for unknown concepts or units, stale concepts (with active alternatives) and series emptied by form filtering (e.g. 20-F filers)
 - **New:** `ghost-alpha edgar filings <TICKER>`: filings filtered by `--form`, 8-K `--item` and `--since` (follows older paginated submission pages, skipping a failing page with a warning); `--format table|json`

@@ -4,11 +4,15 @@ pub mod dashboard_routes;
 pub mod diversification_report;
 pub mod quarterly_report;
 pub mod routes;
+pub mod shell;
 
 use std::sync::Arc;
 
-use axum::Router;
-use tower_http::cors::CorsLayer;
+use axum::http::{header, HeaderValue};
+use axum::middleware::{self, Next};
+use axum::response::Response;
+use axum::{extract::Request, Router};
+use tower_http::compression::CompressionLayer;
 
 use crate::config::AppConfig;
 use crate::storage::db::SqliteRepository;
@@ -20,7 +24,32 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
 }
 
-/// Build the Axum router with all dashboard routes and CORS middleware.
+/// Content-Security-Policy sent on every response. All scripts and styles are
+/// served from `/static`; `style-src` allows inline `style=""` attributes
+/// (and inline SVG styling) only.
+const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self'; \
+style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; \
+base-uri 'self'; frame-ancestors 'none'; form-action 'self'";
+
+/// Attach the CSP and basic hardening headers to every response.
+async fn security_headers(req: Request, next: Next) -> Response {
+    let mut resp = next.run(req).await;
+    resp.headers_mut().insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(CONTENT_SECURITY_POLICY),
+    );
+    resp.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    resp.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("same-origin"),
+    );
+    resp
+}
+
+/// Build the Axum router with all dashboard routes, CSP and gzip middleware.
 pub fn create_router(state: AppState) -> Router {
     Router::new()
         // Full pages
@@ -133,7 +162,8 @@ pub fn create_router(state: AppState) -> Router {
         )
         // Embedded static assets
         .route("/static/*path", axum::routing::get(assets::static_handler))
-        .layer(CorsLayer::permissive())
+        .layer(middleware::from_fn(security_headers))
+        .layer(CompressionLayer::new().gzip(true))
         .with_state(state)
 }
 
