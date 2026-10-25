@@ -18,6 +18,7 @@ use crate::data::edgar::{
     Cik, CompanyFacts, EdgarClient, EdgarConfig, EdgarError, Fact, Filing, Periodicity,
     DEFAULT_DATA_BASE, DEFAULT_WWW_BASE,
 };
+use crate::data::nport::{exposure, Exposure, Holding, IssuerMatcher, NportFiling, NportReport};
 
 /// Env var holding the SEC User-Agent (`"<app or name> <contact email>"`).
 pub const ENV_USER_AGENT: &str = "GHOST_ALPHA_EDGAR_USER_AGENT";
@@ -94,6 +95,41 @@ pub enum EdgarCommand {
         /// Only filings filed on or after this date (YYYY-MM-DD)
         #[arg(long)]
         since: Option<NaiveDate>,
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: EdgarFormat,
+    },
+    /// How much of one issuer ETFs already hold (from SEC N-PORT filings)
+    Overlap {
+        /// Ticker of the issuer to look for (e.g. the stock you want to diversify away from)
+        #[arg(long)]
+        symbol: String,
+        /// ETF tickers to check
+        #[arg(required = true)]
+        etfs: Vec<String>,
+        /// Use the N-PORT filed on or before this date (YYYY-MM-DD); default today
+        #[arg(long)]
+        as_of: Option<NaiveDate>,
+        /// CUSIP of the issuer (first 6 characters identify it across share classes and bonds)
+        #[arg(long)]
+        cusip: Option<String>,
+        /// Legal entity identifier (LEI) of the issuer
+        #[arg(long)]
+        lei: Option<String>,
+        /// Output format
+        #[arg(long, value_enum, default_value = "table")]
+        format: EdgarFormat,
+    },
+    /// List the largest holdings of an ETF (from its SEC N-PORT filing)
+    Holdings {
+        /// ETF ticker
+        etf: String,
+        /// Number of holdings to show
+        #[arg(long, default_value_t = 25)]
+        top: usize,
+        /// Use the N-PORT filed on or before this date (YYYY-MM-DD); default today
+        #[arg(long)]
+        as_of: Option<NaiveDate>,
         /// Output format
         #[arg(long, value_enum, default_value = "table")]
         format: EdgarFormat,
@@ -241,8 +277,305 @@ pub async fn run(cmd: EdgarCommand, config_user_agent: Option<&str>) -> Result<(
                 EdgarFormat::Table => print!("{}", render_filings_table(&cik, &report.filings)),
             }
         }
+        EdgarCommand::Overlap {
+            symbol,
+            etfs,
+            as_of,
+            cusip,
+            lei,
+            format,
+        } => {
+            let as_of = as_of.unwrap_or_else(|| chrono::Local::now().date_naive());
+            let matcher = issuer_matcher(&client, &symbol, cusip.as_deref(), lei.as_deref())
+                .await
+                .with_context(|| format!("edgar overlap failed for {symbol}"))?;
+            let mut rows = Vec::with_capacity(etfs.len());
+            for etf in etfs {
+                // One failing ETF becomes an error row; the others still report.
+                let result = match client.nport_as_of(&etf, as_of).await {
+                    Ok((filing, report)) => {
+                        let exp = exposure(&report, &matcher);
+                        Ok(OverlapOk {
+                            filing,
+                            report,
+                            exp,
+                        })
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+                rows.push(OverlapRow { etf, result });
+            }
+            if rows.iter().all(|r| r.result.is_err()) {
+                let lines: Vec<String> = rows
+                    .iter()
+                    .filter_map(|r| r.result.as_ref().err().map(|e| format!("  {}: {e}", r.etf)))
+                    .collect();
+                anyhow::bail!("edgar overlap failed for every ETF:\n{}", lines.join("\n"));
+            }
+            match format {
+                EdgarFormat::Json => {
+                    println!("{}", serde_json::to_string_pretty(&overlap_json(&rows))?)
+                }
+                EdgarFormat::Table => print!("{}", render_overlap_table(&symbol, &rows)),
+            }
+        }
+        EdgarCommand::Holdings {
+            etf,
+            top,
+            as_of,
+            format,
+        } => {
+            let as_of = as_of.unwrap_or_else(|| chrono::Local::now().date_naive());
+            let (filing, report) = client
+                .nport_as_of(&etf, as_of)
+                .await
+                .with_context(|| format!("edgar holdings failed for {etf}"))?;
+            let rows = top_holdings(&report, top);
+            match format {
+                EdgarFormat::Json => {
+                    println!("{}", serde_json::to_string_pretty(&holdings_json(&rows))?)
+                }
+                EdgarFormat::Table => {
+                    print!("{}", render_holdings_table(&etf, &filing, &report, &rows))
+                }
+            }
+        }
     }
     Ok(())
+}
+
+/// A successful overlap lookup for one ETF.
+struct OverlapOk {
+    filing: NportFiling,
+    report: NportReport,
+    exp: Exposure,
+}
+
+/// One ETF's overlap result, or the message explaining why it has none.
+struct OverlapRow {
+    etf: String,
+    result: Result<OverlapOk, String>,
+}
+
+/// Matcher from the symbol, EDGAR's company title (ticker-only when the symbol
+/// is not in `company_tickers.json`), and the optional `--cusip` / `--lei`.
+async fn issuer_matcher(
+    client: &EdgarClient,
+    symbol: &str,
+    cusip: Option<&str>,
+    lei: Option<&str>,
+) -> Result<IssuerMatcher> {
+    let title = client.issuer_title(symbol).await?;
+    anyhow::ensure!(
+        title.is_some() || cusip.is_some() || lei.is_some(),
+        "{symbol} is not in SEC's company_tickers.json, so there is no company name to match; \
+         pass --cusip or --lei to identify the issuer"
+    );
+    let mut matcher = IssuerMatcher::new(symbol, title.as_deref());
+    if let Some(c) = cusip {
+        let c = c.trim();
+        anyhow::ensure!(
+            (6..=9).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_alphanumeric()),
+            "--cusip must be 6 to 9 letters or digits, got {c:?}"
+        );
+        matcher = matcher.with_cusip(c);
+    }
+    if let Some(l) = lei {
+        let l = l.trim();
+        anyhow::ensure!(
+            l.len() == 20 && l.bytes().all(|b| b.is_ascii_alphanumeric()),
+            "--lei must be 20 letters or digits, got {l:?}"
+        );
+        matcher = matcher.with_lei(l);
+    }
+    Ok(matcher)
+}
+
+fn overlap_json(rows: &[OverlapRow]) -> serde_json::Value {
+    rows.iter()
+        .map(|r| match &r.result {
+            Err(error) => json!({ "etf": r.etf, "error": error }),
+            Ok(ok) => {
+                let matches: Vec<_> = ok
+                    .exp
+                    .matches
+                    .iter()
+                    .map(|m| {
+                        json!({
+                            "name": m.holding.name,
+                            "asset_cat": m.holding.asset_cat,
+                            "pct": m.holding.pct,
+                            "value_usd": m.holding.value_usd,
+                            "rule": m.rule.as_str(),
+                            "counted": m.counted,
+                        })
+                    })
+                    .collect();
+                json!({
+                    "etf": r.etf,
+                    "series_name": ok.report.series_name,
+                    "period_end": ok.report.period_end,
+                    "filed": ok.filing.filing_date,
+                    "accession": ok.filing.accession,
+                    "pct": ok.exp.pct,
+                    "value_usd": ok.exp.value_usd,
+                    "per_10k": per_10k(ok.exp.pct),
+                    "debt_pct": ok.exp.debt_pct,
+                    "debt_value_usd": ok.exp.debt_value_usd,
+                    "matches": matches,
+                })
+            }
+        })
+        .collect()
+}
+
+/// Dollars of the issuer that $10,000 in the fund buys, for `pct` % of net assets.
+fn per_10k(pct: f64) -> f64 {
+    pct / 100.0 * 10_000.0
+}
+
+/// Whole number with thousands separators (`-5020601116` -> `-5,020,601,116`).
+fn group_thousands(v: f64) -> String {
+    let digits = format!("{:.0}", v.abs());
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    // Rounds to zero without a sign: "-0" would be noise.
+    if v < 0.0 && digits.bytes().any(|b| b != b'0') {
+        out.insert(0, '-');
+    }
+    out
+}
+
+/// Dollar amount with the sign in front (`-$1,234`, not `$-1,234`).
+fn usd(v: f64) -> String {
+    match group_thousands(v).strip_prefix('-') {
+        Some(abs) => format!("-${abs}"),
+        None => format!("${}", group_thousands(v)),
+    }
+}
+
+/// `s` cut to at most `width` characters, ending in `…` when shortened.
+fn fit(s: &str, width: usize) -> String {
+    if s.chars().count() <= width {
+        s.to_string()
+    } else {
+        let mut cut: String = s.chars().take(width.saturating_sub(1)).collect();
+        cut.push('…');
+        cut
+    }
+}
+
+fn render_overlap_table(symbol: &str, rows: &[OverlapRow]) -> String {
+    let symbol = symbol.to_uppercase();
+    let mut out = String::new();
+    for r in rows {
+        let etf = r.etf.to_uppercase();
+        let ok = match &r.result {
+            Ok(ok) => ok,
+            Err(error) => {
+                out.push_str(&format!("{etf}  unavailable: {error}\n\n"));
+                continue;
+            }
+        };
+        out.push_str(&format!(
+            "{etf}  {}\n  holdings as of {}, N-PORT filed {} ({})\n",
+            ok.report.series_name, ok.report.period_end, ok.filing.filing_date, ok.filing.accession
+        ));
+        if ok.exp.matches.is_empty() {
+            out.push_str(&format!("  {symbol}: not held (0.00% of net assets)\n\n"));
+            continue;
+        }
+        out.push_str(&format!(
+            "  {symbol}: {:.2}% of net assets (equity), {}  ->  {} per $10,000 invested\n",
+            ok.exp.pct,
+            usd(ok.exp.value_usd),
+            usd(per_10k(ok.exp.pct))
+        ));
+        if ok.exp.debt_pct != 0.0 {
+            out.push_str(&format!(
+                "  debt: {:.2}% of net assets, {} (issuer bonds, not included above)\n",
+                ok.exp.debt_pct,
+                usd(ok.exp.debt_value_usd)
+            ));
+        }
+        for m in &ok.exp.matches {
+            out.push_str(&format!(
+                "    {:<36}  {:<4}  {:>8.2}%  {:>16}  by {}{}\n",
+                fit(&m.holding.name, 36),
+                m.holding.asset_cat,
+                m.holding.pct,
+                group_thousands(m.holding.value_usd),
+                m.rule.as_str(),
+                if m.counted { "" } else { " (not summed)" }
+            ));
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// The `top` largest holdings by percent of net assets, largest first.
+fn top_holdings(report: &NportReport, top: usize) -> Vec<&Holding> {
+    let mut v: Vec<&Holding> = report.holdings.iter().collect();
+    v.sort_by(|a, b| b.pct.total_cmp(&a.pct));
+    v.truncate(top);
+    v
+}
+
+fn holdings_json(rows: &[&Holding]) -> serde_json::Value {
+    rows.iter()
+        .map(|h| {
+            json!({
+                "name": h.name,
+                "cusip": h.cusip,
+                "asset_cat": h.asset_cat,
+                "pct": h.pct,
+                "value_usd": h.value_usd,
+            })
+        })
+        .collect()
+}
+
+fn render_holdings_table(
+    etf: &str,
+    filing: &NportFiling,
+    report: &NportReport,
+    rows: &[&Holding],
+) -> String {
+    let mut out = format!(
+        "{}  {}\n  holdings as of {}, N-PORT filed {} ({}); showing {} of {}\n",
+        etf.to_uppercase(),
+        report.series_name,
+        report.period_end,
+        filing.filing_date,
+        filing.accession,
+        rows.len(),
+        report.holdings.len()
+    );
+    if rows.is_empty() {
+        out.push_str("(no holdings)\n");
+        return out;
+    }
+    out.push_str(&format!(
+        "{:<44}  {:<9}  {:<4}  {:>8}  {:>16}\n",
+        "NAME", "CUSIP", "CAT", "% NET", "VALUE USD"
+    ));
+    for h in rows {
+        out.push_str(&format!(
+            "{:<44}  {:<9}  {:<4}  {:>8.2}  {:>16}\n",
+            fit(&h.name, 44),
+            h.cusip.as_deref().unwrap_or("-"),
+            h.asset_cat,
+            h.pct,
+            group_thousands(h.value_usd)
+        ));
+    }
+    out
 }
 
 fn filings_json(cik: &Cik, filings: &[Filing]) -> serde_json::Value {

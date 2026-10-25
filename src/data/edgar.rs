@@ -33,6 +33,8 @@ const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
 /// Upper bound for exponential backoff growth.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// Archive documents (N-PORT files of bond funds reach 30-40 MB) get longer.
+const DOCUMENT_TIMEOUT: Duration = Duration::from_secs(120);
 /// How far in the future a cache file's mtime may be and still count as fresh.
 const FUTURE_MTIME_TOLERANCE: Duration = Duration::from_secs(300);
 const MAX_SUGGESTIONS: usize = 5;
@@ -95,6 +97,42 @@ pub enum EdgarError {
     /// Transport-level failure (DNS, TLS, timeout, ...) after retries.
     #[error("network error talking to SEC EDGAR: {0}")]
     Network(String),
+    /// Ticker not present in SEC's mutual-fund / ETF ticker map.
+    #[error("unknown fund ticker {ticker:?}{}", fmt_suggestions(.suggestions))]
+    UnknownFund {
+        /// Ticker as given by the caller.
+        ticker: String,
+        /// Similar fund tickers.
+        suggestions: Vec<String>,
+    },
+    /// Known to SEC but not a fund series, so it files no N-PORT (a unit investment
+    /// trust such as SPY, or an operating company).
+    #[error(
+        "{ticker} is not a registered fund series, so it files no N-PORT: it is a unit \
+         investment trust (e.g. SPY) or an operating company; no holdings data"
+    )]
+    NotNportFiler {
+        /// Ticker as given by the caller.
+        ticker: String,
+    },
+    /// The fetched N-PORT document belongs to a different series than the fund map says.
+    #[error("N-PORT document is for series {found}, expected {expected} ({ticker})")]
+    SeriesMismatch {
+        /// Ticker as given by the caller.
+        ticker: String,
+        /// Series the fund map says the ticker belongs to.
+        expected: String,
+        /// Series found in the document.
+        found: String,
+    },
+    /// The fund has no N-PORT filing on or before `as_of`.
+    #[error("no N-PORT filing for {ticker} on or before {as_of}")]
+    NoNportFiling {
+        /// Ticker as given by the caller.
+        ticker: String,
+        /// Requested point-in-time date.
+        as_of: NaiveDate,
+    },
 }
 
 fn not_found_hint(url: &str) -> &'static str {
@@ -113,11 +151,11 @@ fn fmt_suggestions(s: &[String]) -> String {
     }
 }
 
-fn parse_err(e: impl fmt::Display) -> EdgarError {
+pub(super) fn parse_err(e: impl fmt::Display) -> EdgarError {
     EdgarError::Parse(e.to_string())
 }
 
-fn parse_date(s: &str, what: &str) -> Result<NaiveDate, EdgarError> {
+pub(super) fn parse_date(s: &str, what: &str) -> Result<NaiveDate, EdgarError> {
     NaiveDate::parse_from_str(s, "%Y-%m-%d")
         .map_err(|e| EdgarError::Parse(format!("bad {what} date {s:?}: {e}")))
 }
@@ -169,7 +207,7 @@ impl fmt::Display for Cik {
 }
 
 /// Accepts the JSON number or string forms SEC uses for CIKs.
-fn cik_from_value(v: &Value) -> Result<Cik, EdgarError> {
+pub(super) fn cik_from_value(v: &Value) -> Result<Cik, EdgarError> {
     match v {
         Value::Number(n) => n
             .as_u64()
@@ -184,7 +222,7 @@ fn cik_from_value(v: &Value) -> Result<Cik, EdgarError> {
 
 /// Normalise a ticker the way SEC spells class shares: `.`, `/`, `_` and spaces
 /// become `-`, then upper-case (`brk.b` -> `BRK-B`).
-fn normalize_ticker(t: &str) -> String {
+pub(super) fn normalize_ticker(t: &str) -> String {
     t.trim()
         .chars()
         .map(|c| match c {
@@ -199,12 +237,20 @@ fn normalize_ticker(t: &str) -> String {
 #[derive(Debug, Clone, Default)]
 pub struct TickerMap {
     map: HashMap<String, Cik>,
+    titles: HashMap<String, String>,
 }
 
 impl TickerMap {
     /// CIK for `ticker`, ignoring case and treating `.`, `/`, `_`, ` ` as `-`.
     pub fn get(&self, ticker: &str) -> Option<&Cik> {
         self.map.get(&normalize_ticker(ticker))
+    }
+
+    /// EDGAR company title for `ticker` (same normalisation as [`TickerMap::get`]).
+    pub fn title(&self, ticker: &str) -> Option<&str> {
+        self.titles
+            .get(&normalize_ticker(ticker))
+            .map(String::as_str)
     }
 
     /// Number of tickers.
@@ -222,20 +268,26 @@ impl TickerMap {
     /// ties alphabetical. One-character tickers are only offered for a
     /// one-character query.
     pub fn suggest(&self, query: &str) -> Vec<String> {
-        let q = normalize_ticker(query);
-        if q.is_empty() {
-            return Vec::new();
-        }
-        let shared = |t: &str| t.chars().zip(q.chars()).take_while(|(a, b)| a == b).count();
-        let mut v: Vec<&String> = self
-            .map
-            .keys()
-            .filter(|t| t.starts_with(&q) || q.starts_with(t.as_str()))
-            .filter(|t| t.len() > 1 || q.len() == 1)
-            .collect();
-        v.sort_by(|a, b| shared(b).cmp(&shared(a)).then_with(|| a.cmp(b)));
-        v.into_iter().take(MAX_SUGGESTIONS).cloned().collect()
+        suggest_tickers(self.map.keys(), query)
     }
+}
+
+/// Ranking behind [`TickerMap::suggest`], shared with the fund ticker map.
+pub(super) fn suggest_tickers<'a>(
+    keys: impl Iterator<Item = &'a String>,
+    query: &str,
+) -> Vec<String> {
+    let q = normalize_ticker(query);
+    if q.is_empty() {
+        return Vec::new();
+    }
+    let shared = |t: &str| t.chars().zip(q.chars()).take_while(|(a, b)| a == b).count();
+    let mut v: Vec<&String> = keys
+        .filter(|t| t.starts_with(&q) || q.starts_with(t.as_str()))
+        .filter(|t| t.len() > 1 || q.len() == 1)
+        .collect();
+    v.sort_by(|a, b| shared(b).cmp(&shared(a)).then_with(|| a.cmp(b)));
+    v.into_iter().take(MAX_SUGGESTIONS).cloned().collect()
 }
 
 /// Parse SEC's `company_tickers.json` (an object of `{cik_str, ticker, title}`).
@@ -244,18 +296,27 @@ pub fn parse_company_tickers(json: &str) -> Result<TickerMap, EdgarError> {
     struct Row {
         cik_str: Value,
         ticker: String,
+        #[serde(default)]
+        title: Option<String>,
     }
     let rows: HashMap<String, Row> = serde_json::from_str(json).map_err(parse_err)?;
     let mut map = HashMap::with_capacity(rows.len());
+    let mut titles = HashMap::new();
     // Numeric row keys ("0", "1", ...) give SEC's ranking order; keep the first
     // row if a ticker is duplicated.
     let mut ordered: Vec<(&String, &Row)> = rows.iter().collect();
     ordered.sort_by_key(|(k, _)| (k.len(), k.as_str()));
     for (_, row) in ordered {
         let cik = cik_from_value(&row.cik_str)?;
-        map.entry(normalize_ticker(&row.ticker)).or_insert(cik);
+        let ticker = normalize_ticker(&row.ticker);
+        if let Some(title) = &row.title {
+            titles
+                .entry(ticker.clone())
+                .or_insert_with(|| title.clone());
+        }
+        map.entry(ticker).or_insert(cik);
     }
-    Ok(TickerMap { map })
+    Ok(TickerMap { map, titles })
 }
 
 // ─── Company facts ────────────────────────────────────────────────────────────
@@ -836,7 +897,7 @@ pub struct EdgarClient {
     http: reqwest::Client,
     limiter: Limiter,
     data_base: String,
-    www_base: String,
+    pub(super) www_base: String,
 }
 
 impl fmt::Debug for EdgarClient {
@@ -851,7 +912,7 @@ impl fmt::Debug for EdgarClient {
 
 /// Directory-safe `host_port` namespace for a base URL, so clients pointed at
 /// different hosts never share cache entries.
-fn cache_namespace(base: &str) -> String {
+pub(super) fn cache_namespace(base: &str) -> String {
     let raw = url::Url::parse(base)
         .ok()
         .and_then(|u| {
@@ -909,15 +970,20 @@ impl EdgarClient {
 
     /// Resolve a ticker (case-insensitive) to its CIK.
     pub async fn cik_for(&self, ticker: &str) -> Result<Cik, EdgarError> {
-        let url = format!("{}/files/company_tickers.json", self.www_base);
-        let key = format!("{}/{TICKERS_CACHE_KEY}", cache_namespace(&self.www_base));
-        let map = self.get_cached(&url, &key, parse_company_tickers).await?;
+        let map = self.company_tickers().await?;
         map.get(ticker)
             .cloned()
             .ok_or_else(|| EdgarError::UnknownTicker {
                 ticker: ticker.to_string(),
                 suggestions: map.suggest(ticker),
             })
+    }
+
+    /// The cached `company_tickers.json` map (ticker -> CIK and company title).
+    pub(super) async fn company_tickers(&self) -> Result<TickerMap, EdgarError> {
+        let url = format!("{}/files/company_tickers.json", self.www_base);
+        let key = format!("{}/{TICKERS_CACHE_KEY}", cache_namespace(&self.www_base));
+        self.get_cached(&url, &key, parse_company_tickers).await
     }
 
     /// XBRL company facts for a ticker or (all-digit) CIK.
@@ -1049,9 +1115,23 @@ impl EdgarClient {
         key: &str,
         parse: fn(&str) -> Result<T, EdgarError>,
     ) -> Result<T, EdgarError> {
+        self.get_cached_with(url, key, parse, false).await
+    }
+
+    /// [`EdgarClient::get_cached`] with an `immutable` switch: an immutable
+    /// entry (e.g. an N-PORT document, fixed per accession) never expires, even
+    /// with `cache_ttl_hours = 0`. Immutable entries are large archive documents,
+    /// so they are also fetched with the longer [`DOCUMENT_TIMEOUT`].
+    pub(super) async fn get_cached_with<T>(
+        &self,
+        url: &str,
+        key: &str,
+        parse: fn(&str) -> Result<T, EdgarError>,
+        immutable: bool,
+    ) -> Result<T, EdgarError> {
         let path = self.cfg.cache_dir.join(key);
         let cached = std::fs::read_to_string(&path).ok();
-        if self.is_fresh(&path) {
+        if immutable || self.is_fresh(&path) {
             if let Some(body) = &cached {
                 match parse(body) {
                     Ok(v) => return Ok(v),
@@ -1061,7 +1141,12 @@ impl EdgarClient {
                 }
             }
         }
-        match self.fetch(url).await {
+        let timeout = if immutable {
+            DOCUMENT_TIMEOUT
+        } else {
+            REQUEST_TIMEOUT
+        };
+        match self.fetch(url, timeout).await {
             Ok(body) => {
                 let parsed = parse(&body)?;
                 self.write_cache(&path, &body);
@@ -1117,13 +1202,14 @@ impl EdgarClient {
     /// and otherwise backing off exponentially (with jitter) from
     /// `retry_base_delay_ms`. 403, other 4xx and request-building errors
     /// (e.g. a base URL without a scheme) are not retried.
-    async fn fetch(&self, url: &str) -> Result<String, EdgarError> {
+    async fn fetch(&self, url: &str, timeout: Duration) -> Result<String, EdgarError> {
         let mut attempt: u32 = 0;
         loop {
             self.limiter.until_ready().await;
             let outcome: Result<String, (EdgarError, Option<Duration>)> = match self
                 .http
                 .get(url)
+                .timeout(timeout)
                 .send()
                 .await
             {

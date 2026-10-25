@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/nport" xmlns:com="http://www.sec.gov/edgar/common" xmlns:ncom="http://www.sec.gov/edgar/nportcommon" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <headerData>
+    <submissionType>NPORT-P</submissionType>
+    <filerInfo>
+      <filer><issuerCredentials><cik>0009999001</cik></issuerCredentials></filer>
+      <seriesClassInfo><seriesId>S999999001</seriesId><classId>C999999001</classId></seriesClassInfo>
+    </filerInfo>
+  </headerData>
+  <formData>
+    <genInfo>
+      <regName>Example Funds Trust</regName>
+      <regCik>0009999001</regCik>
+      <seriesName>Example Synthetic Overlap Fund</seriesName>
+      <seriesId>S999999001</seriesId>
+      <repPdEnd>2026-12-31</repPdEnd>
+      <repPdDate>2026-09-30</repPdDate>
+    </genInfo>
+    <fundInfo>
+      <totAssets>101000000.00</totAssets>
+      <totLiabs>1000000.00</totLiabs>
+      <netAssets>100000000.00</netAssets>
+    </fundInfo>
+    <invstOrSecs>
+      <invstOrSec>
+        <name>Amazon.com Inc</name>
+        <lei>ZXTILKJKG63JELOEG630</lei>
+        <title>Amazon.com Inc</title>
+        <cusip>023135106</cusip>
+        <identifiers>
+          <isin value="US0231351067"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>5000000.00</valUSD>
+        <pctVal>5.0</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Goldman Sachs International</name>
+        <lei>W22LROWP2IHZNBB6K528</lei>
+        <title>Total Return Swap on Amazon.com Inc</title>
+        <cusip>N/A</cusip>
+        <units>NC</units>
+        <curCd>USD</curCd>
+        <valUSD>-1000000.00</valUSD>
+        <pctVal>-1.0</pctVal>
+        <payoffProfile>Short</payoffProfile>
+        <assetCat>DE</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Amazon.com Inc</name>
+        <lei>ZXTILKJKG63JELOEG630</lei>
+        <title>Amazon.com Inc 3.15% 08/22/2027</title>
+        <cusip>023135BW5</cusip>
+        <identifiers>
+          <isin value="US023135BW51"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>500000.00</valUSD>
+        <pctVal>0.5</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>DBT</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Alphabet Inc</name>
+        <title>Alphabet Inc - Class A</title>
+        <cusip>02079K305</cusip>
+        <identifiers>
+          <isin value="US02079K3059"/>
+          <ticker value="GOOGL"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>2000000.00</valUSD>
+        <pctVal>2.0</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Alphabet Inc</name>
+        <title>Alphabet Inc - Class C</title>
+        <cusip>02079K107</cusip>
+        <identifiers>
+          <isin value="US02079K1079"/>
+          <ticker value="GOOG"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>1500000.00</valUSD>
+        <pctVal>1.5</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Amazon.com, Inc.</name>
+        <cusip>N/A</cusip>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>250000.00</valUSD>
+        <pctVal>0.25</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Amazonas Energia SA</name>
+        <title>Amazonas Energia SA Ordinary</title>
+        <cusip>P0123X104</cusip>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>400000.00</valUSD>
+        <pctVal>0.4</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Microsoft Corp</name>
+        <title>Microsoft Corp</title>
+        <cusip>594918104</cusip>
+        <identifiers>
+          <isin value="US5949181045"/>
+          <ticker value="MSFT"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>6000000.00</valUSD>
+        <pctVal>6.0</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Microsoft Corp</name>
+        <title>Microsoft Corp ADR-style line</title>
+        <cusip>N/A</cusip>
+        <identifiers>
+          <isin value="US5949181045"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>100000.00</valUSD>
+        <pctVal>0.1</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Meta Platforms Inc</name>
+        <title>Meta Platforms Inc</title>
+        <cusip>N/A</cusip>
+        <identifiers>
+          <ticker value="META"/>
+        </identifiers>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>3000000.00</valUSD>
+        <pctVal>3.0</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Example Subsidiary Holdings</name>
+        <lei>5493001KJTIIGC8Y1R12</lei>
+        <title>Example Subsidiary Holdings Ltd</title>
+        <cusip>N/A</cusip>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>300000.00</valUSD>
+        <pctVal>0.3</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Bare Minimum Name</name>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>50000.00</valUSD>
+        <pctVal>0.05</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Amazon.com Inc</name>
+        <lei>ZXTILKJKG63JELOEG630</lei>
+        <title>Amazon.com Inc Call Option</title>
+        <cusip>023135106</cusip>
+        <units>NC</units>
+        <curCd>USD</curCd>
+        <valUSD>200000.00</valUSD>
+        <pctVal>0.2</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>DE</assetCat>
+      </invstOrSec>
+    </invstOrSecs>
+  </formData>
+</edgarSubmission>

@@ -5,6 +5,7 @@ pub mod fetcher;
 pub mod fred;
 pub mod fundamentals;
 pub mod models;
+pub mod nport;
 pub mod provider;
 pub mod sample;
 pub mod universes;
