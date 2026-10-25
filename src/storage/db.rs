@@ -139,6 +139,8 @@ pub trait Repository: Send + Sync {
         result: &ScreenResult,
     ) -> Result<(), StorageError>;
     fn get_screen_results(&self, run_date: NaiveDate) -> Result<Vec<ScreenResult>, StorageError>;
+    /// Newest `run_date` (YYYY-MM-DD) that has screen results, if any.
+    fn latest_screen_date(&self) -> Result<Option<String>, StorageError>;
 
     // --- Alert log ---
     fn record_alert(&self, alert: &OutboundAlert) -> Result<(), StorageError>;
@@ -530,6 +532,15 @@ impl Repository for SqliteRepository {
             ],
         )?;
         Ok(())
+    }
+
+    fn latest_screen_date(&self) -> Result<Option<String>, StorageError> {
+        let conn = self.connection()?;
+        let date: Option<String> =
+            conn.query_row("SELECT MAX(run_date) FROM screen_results", [], |row| {
+                row.get(0)
+            })?;
+        Ok(date)
     }
 
     fn get_screen_results(&self, run_date: NaiveDate) -> Result<Vec<ScreenResult>, StorageError> {

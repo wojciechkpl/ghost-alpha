@@ -11,6 +11,14 @@ All notable changes to GhostAlpha are documented in this file.
 - **Changed:** security and caching: Content-Security-Policy, `nosniff` and `Referrer-Policy` on every response, gzip compression, permissive CORS removed, content-hashed static URLs (`?v=`) served immutable, weak ETags with 304s
 - **Fixed:** the home screen's 60-second refresh no longer resets a chosen past date
 
+### Web dashboard: freshness, honesty and chart accessibility
+- **New:** a freshness chip in every page header shows the newest screen run, a state word (Fresh, Aging, Stale, No data) and its age in trading days (weekdays; exchange holidays are not modelled)
+- **New:** pages driven by built-in sample inputs (`/rotation`, `/sizing`, `/optimize`, and `/concentration-decay` without `shares` and `price`) carry an "Illustrative inputs" banner linking to the import instructions
+- **New:** sortable column headers and a filter box on the screening, watchlist and alert tables (`table.js`, keyboard accessible, kept across 60-second refreshes); ticker cells link to `/valuation?ticker=SYM`
+- **New:** every chart has a title and description for screen readers, a "Table view" with the plotted numbers, axis titles with units, and labels of at least 11px; decorative in-cell graphics are hidden from assistive technology
+- **Changed:** chart and inline colours come from the theme tokens (`var(--ga-*)`), so charts follow light and dark mode; the concentration-decay chart starts at "Start" instead of "Q0"
+- **Changed:** `nav.js` loads synchronously to avoid a flash of the open menu on small screens; `status.js` announces user-triggered updates ("Updated 14:03:21") in the page's status region
+
 ### SEC EDGAR client
 - **New:** `ghost-alpha edgar facts <TICKER>`: point-in-time XBRL company facts. Annual (335-395 day) and quarterly (61-121 day) series; restatements and amendments appear only from their filing date (`--as-of`, inclusive); START and FILING FY/FP columns; stderr hints for unknown concepts or units, stale concepts (with active alternatives) and series emptied by form filtering (e.g. 20-F filers)
 - **New:** `ghost-alpha edgar filings <TICKER>`: filings filtered by `--form`, 8-K `--item` and `--since` (follows older paginated submission pages, skipping a failing page with a warning); `--format table|json`

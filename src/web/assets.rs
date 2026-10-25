@@ -3,6 +3,8 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use rust_embed::Embed;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 #[derive(Embed)]
 #[folder = "web/static/"]
@@ -25,10 +27,18 @@ fn hex(bytes: &[u8]) -> String {
 ///
 /// Falls back to the bare URL if the asset is not embedded.
 pub fn versioned(name: &str) -> String {
-    match StaticAssets::get(name) {
-        Some(f) => format!("/static/{name}?v={}", &hex(&f.metadata.sha256_hash())[..8]),
-        None => format!("/static/{name}"),
+    static CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(url) = cache.get(name) {
+        return url.clone();
     }
+    let url = match StaticAssets::get(name) {
+        Some(f) => format!("/static/{name}?v={}", &hex(&f.metadata.sha256_hash())[..8]),
+        None => return format!("/static/{name}"),
+    };
+    cache.insert(name.to_string(), url.clone());
+    url
 }
 
 /// Serve an embedded static file at `/static/{path}`.

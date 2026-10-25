@@ -11,11 +11,11 @@ use serde::Deserialize;
 
 use crate::storage::db::Repository;
 use crate::web::charts::{
-    correlation_matrix_svg, donut_svg, frontier_svg, timeline_bar_svg, DonutSlice, FrontierPoint,
-    TimelinePeriod,
+    accessible, correlation_matrix_svg, donut_svg, frontier_svg, timeline_bar_svg, DonutSlice,
+    FrontierPoint, TimelinePeriod,
 };
 
-use super::shell::{html_escape, shell};
+use super::shell::{html_escape, illustrative_banner, page};
 use super::AppState;
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
@@ -58,8 +58,18 @@ pub struct TickerParam {
 // ─── Portfolio Colours ──────────────────────────────────────────────────────
 
 const PORTFOLIO_COLOURS: &[&str] = &[
-    "#4c6ef5", "#7950f2", "#ae3ec9", "#e64980", "#f76707", "#f59f00", "#82c91e", "#20c997",
-    "#15aabf", "#339af0", "#5c7cfa", "#845ef7",
+    "var(--ga-cat-1)",
+    "var(--ga-cat-2)",
+    "var(--ga-cat-3)",
+    "var(--ga-cat-4)",
+    "var(--ga-cat-5)",
+    "var(--ga-cat-6)",
+    "var(--ga-cat-7)",
+    "var(--ga-cat-8)",
+    "var(--ga-cat-9)",
+    "var(--ga-cat-10)",
+    "var(--ga-cat-11)",
+    "var(--ga-cat-12)",
 ];
 
 // ─── 1. Portfolio Overview ──────────────────────────────────────────────────
@@ -73,7 +83,7 @@ pub async fn portfolio_page(State(state): State<AppState>) -> Html<String> {
 
     if lots.is_empty() {
         let body = r#"<p class="empty-state">No portfolio data. Import via <code>ghost-alpha portfolio import</code></p>"#;
-        return Html(shell("/portfolio", "Portfolio Overview", body));
+        return page(&state, "/portfolio", "Portfolio Overview", body).await;
     }
 
     // Aggregate by ticker: total shares, weighted cost basis
@@ -118,7 +128,26 @@ pub async fn portfolio_page(State(state): State<AppState>) -> Html<String> {
         ));
     }
 
-    let donut = donut_svg(&slices, 300, 300);
+    let donut = accessible(
+        &donut_svg(&slices, 300, 300),
+        "Portfolio allocation by cost basis",
+        &format!(
+            "Donut chart of cost basis by ticker: {}.",
+            slices
+                .iter()
+                .map(|s| format!(
+                    "{} {:.0} percent",
+                    s.label,
+                    if total_cost > 0.0 {
+                        s.value / total_cost * 100.0
+                    } else {
+                        0.0
+                    }
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    );
     let hhi_display = format!("{:.4}", hhi);
     let hhi_label = if hhi > 0.25 {
         "Highly Concentrated"
@@ -144,7 +173,7 @@ pub async fn portfolio_page(State(state): State<AppState>) -> Html<String> {
   </div>
 </div>"#
     );
-    Html(shell("/portfolio", "Portfolio Overview", &body))
+    page(&state, "/portfolio", "Portfolio Overview", &body).await
 }
 
 // ─── 2. Correlation Matrix ──────────────────────────────────────────────────
@@ -158,11 +187,18 @@ pub async fn correlation_page(State(state): State<AppState>) -> Html<String> {
 
     let Some((snap_date, tickers, matrix, window)) = snapshot else {
         let body = r#"<p class="empty-state">No correlation data. Run <code>ghost-alpha correlate</code> to generate.</p>"#;
-        return Html(shell("/correlation", "Correlation Matrix", body));
+        return page(&state, "/correlation", "Correlation Matrix", body).await;
     };
 
     let ticker_refs: Vec<&str> = tickers.iter().map(|s| s.as_str()).collect();
-    let heatmap = correlation_matrix_svg(&ticker_refs, &matrix, 600, 600);
+    let heatmap = accessible(
+        &correlation_matrix_svg(&ticker_refs, &matrix, 600, 600),
+        "Correlation matrix",
+        &format!(
+            "Heatmap of pairwise correlations between {} tickers over a {window}-day window as of {snap_date}; values range from -1 to +1.",
+            tickers.len()
+        ),
+    );
 
     // Find high-correlation pairs (>0.8, excluding diagonal)
     let mut high_pairs = Vec::new();
@@ -206,7 +242,7 @@ pub async fn correlation_page(State(state): State<AppState>) -> Html<String> {
 <h2>Highly Correlated Pairs (&gt; 0.80)</h2>
 {pair_table}"#
     );
-    Html(shell("/correlation", "Correlation Matrix", &body))
+    page(&state, "/correlation", "Correlation Matrix", &body).await
 }
 
 // ─── 3. Valuation Dashboard ────────────────────────────────────────────────
@@ -219,7 +255,7 @@ pub async fn valuation_page(
         Some(t) if !t.is_empty() => t,
         _ => {
             let body = r#"<p class="empty-state">No valuation data available. Select a ticker: <code>/valuation?ticker=AAPL</code></p>"#;
-            return Html(shell("/valuation", "Valuation Dashboard", body));
+            return page(&state, "/valuation", "Valuation Dashboard", body).await;
         }
     };
 
@@ -245,7 +281,7 @@ pub async fn valuation_page(
             r#"<h2>Valuation &mdash; {escaped_ticker}</h2>
 <p class="empty-state">No valuation data available for {escaped_ticker}.</p>"#
         );
-        return Html(shell("/valuation", "Valuation", &body));
+        return page(&state, "/valuation", "Valuation", &body).await;
     }
 
     // Build metrics table
@@ -268,7 +304,16 @@ pub async fn valuation_page(
     // PE sparkline from bands
     let sparkline = if !bands.is_empty() {
         let values: Vec<f64> = bands.iter().map(|(_, v)| *v).collect();
-        crate::web::charts::sparkline_svg(&values, 200, 40)
+        accessible(
+            &crate::web::charts::sparkline_svg(&values, 200, 40),
+            "P/E trend",
+            &format!(
+                "Line chart of the P/E ratio over {} periods, from {:.1} to {:.1}.",
+                values.len(),
+                values.first().copied().unwrap_or(0.0),
+                values.last().copied().unwrap_or(0.0)
+            ),
+        )
     } else {
         String::new()
     };
@@ -285,7 +330,7 @@ pub async fn valuation_page(
 </table>
 </div>"#
     );
-    Html(shell("/valuation", "Valuation", &body))
+    page(&state, "/valuation", "Valuation", &body).await
 }
 
 // ─── 4. Tax Overview ────────────────────────────────────────────────────────
@@ -299,7 +344,7 @@ pub async fn tax_page(State(state): State<AppState>) -> Html<String> {
 
     if lots.is_empty() {
         let body = r#"<p class="empty-state">No tax lots imported.</p>"#;
-        return Html(shell("/tax", "Tax Overview", body));
+        return page(&state, "/tax", "Tax Overview", body).await;
     }
 
     // Build detail table
@@ -341,7 +386,7 @@ pub async fn tax_page(State(state): State<AppState>) -> Html<String> {
 </table>
 </div>"#
     );
-    Html(shell("/tax", "Tax Overview", &body))
+    page(&state, "/tax", "Tax Overview", &body).await
 }
 
 // ─── 5. Optimization ───────────────────────────────────────────────────────
@@ -382,25 +427,29 @@ pub async fn optimize_page(State(state): State<AppState>) -> Html<String> {
                 risk: 5.0,
                 ret: 3.0,
                 label: "Conservative".into(),
-                color: "#4c6ef5".into(),
+                color: "var(--ga-cat-1)".into(),
                 highlighted: true,
             },
             FrontierPoint {
                 risk: 10.0,
                 ret: 6.5,
                 label: "Moderate".into(),
-                color: "#7950f2".into(),
+                color: "var(--ga-cat-2)".into(),
                 highlighted: true,
             },
             FrontierPoint {
                 risk: 16.0,
                 ret: 9.0,
                 label: "Growth".into(),
-                color: "#ae3ec9".into(),
+                color: "var(--ga-cat-3)".into(),
                 highlighted: true,
             },
         ];
-        let svg = frontier_svg(&demo_points, None, 600, 400);
+        let svg = accessible(
+            &frontier_svg(&demo_points, None, 600, 400),
+            "Efficient frontier",
+            "Scatter chart of expected return in percent against risk in percent for sample model portfolios, joined by the frontier curve.",
+        );
         format!(
             r#"<h2>Efficient Frontier</h2>
 <div class="chart-container">{svg}</div>"#
@@ -410,15 +459,16 @@ pub async fn optimize_page(State(state): State<AppState>) -> Html<String> {
             .to_string()
     };
 
+    let banner = illustrative_banner();
     let body = format!(
-        r#"{frontier_html}
+        r#"{banner}{frontier_html}
 <h2>Model Portfolios</h2>
 <table><caption class="sr-only">Optimization profiles and their asset weights</caption>
   <thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Weights</th></tr></thead>
   <tbody>{model_table}</tbody>
 </table>"#
     );
-    Html(shell("/optimize", "Portfolio Optimization", &body))
+    page(&state, "/optimize", "Portfolio Optimization", &body).await
 }
 
 // ─── 6. ETF Comparison ─────────────────────────────────────────────────────
@@ -432,7 +482,7 @@ pub async fn etf_page(State(state): State<AppState>) -> Html<String> {
 
     if snapshots.is_empty() {
         let body = r#"<p class="empty-state">No ETF data. Run <code>ghost-alpha etf-sync</code> to populate.</p>"#;
-        return Html(shell("/etf", "ETF Comparison", body));
+        return page(&state, "/etf", "ETF Comparison", body).await;
     }
 
     let mut etf_rows = String::new();
@@ -470,7 +520,7 @@ pub async fn etf_page(State(state): State<AppState>) -> Html<String> {
 </table>
 </div>"#
     );
-    Html(shell("/etf", "ETF Comparison", &body))
+    page(&state, "/etf", "ETF Comparison", &body).await
 }
 
 // ─── 7. Selling Programme ──────────────────────────────────────────────────
@@ -512,7 +562,7 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
 
     if all_programmes.is_empty() {
         let body = r#"<p class="empty-state">No selling programme configured.</p>"#;
-        return Html(shell("/selling", "Selling Programme", body));
+        return page(&state, "/selling", "Selling Programme", body).await;
     }
 
     let mut sections = String::new();
@@ -529,10 +579,14 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
                 label: format!("{}Q{}", p.year, p.quarter),
                 target: p.shares_target,
                 executed: p.executed_shares,
-                color: "#51cf66".to_string(),
+                color: "var(--ga-pos)".to_string(),
             })
             .collect();
-        let chart = timeline_bar_svg(&periods, 600, (periods.len() as u32 * 40).max(100));
+        let chart = accessible(
+            &timeline_bar_svg(&periods, 600, (periods.len() as u32 * 40).max(100)),
+            &format!("{} selling programme progress", prog.ticker),
+            "Paired bars per quarter showing target shares against executed shares, with completion percentage.",
+        );
 
         // Schedule table
         let mut schedule_rows = String::new();
@@ -561,7 +615,7 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
         ));
     }
 
-    Html(shell("/selling", "Selling Programme", &sections))
+    page(&state, "/selling", "Selling Programme", &sections).await
 }
 
 // ─── 8. Decision Log ───────────────────────────────────────────────────────
@@ -575,7 +629,7 @@ pub async fn decisions_page(State(state): State<AppState>) -> Html<String> {
 
     if decisions.is_empty() {
         let body = r#"<p class="empty-state">No decisions logged.</p>"#;
-        return Html(shell("/decisions", "Decision Log", body));
+        return page(&state, "/decisions", "Decision Log", body).await;
     }
 
     let mut rows = String::new();
@@ -616,7 +670,7 @@ pub async fn decisions_page(State(state): State<AppState>) -> Html<String> {
 </table>
 </div>"#
     );
-    Html(shell("/decisions", "Decision Log", &body))
+    page(&state, "/decisions", "Decision Log", &body).await
 }
 
 // ─── 9. Fundamentals ───────────────────────────────────────────────────────
@@ -637,7 +691,7 @@ pub async fn fundamentals_page(State(state): State<AppState>) -> Html<String> {
 
     if metrics.is_empty() && sectors.is_empty() {
         let body = r#"<p class="empty-state">No fundamental data available.</p>"#;
-        return Html(shell("/fundamentals", "Fundamentals", body));
+        return page(&state, "/fundamentals", "Fundamentals", body).await;
     }
 
     // Metrics table
@@ -703,7 +757,7 @@ pub async fn fundamentals_page(State(state): State<AppState>) -> Html<String> {
         r#"{metrics_section}
 {sector_section}"#
     );
-    Html(shell("/fundamentals", "Fundamentals", &body))
+    page(&state, "/fundamentals", "Fundamentals", &body).await
 }
 
 // ─── 10. Concentration Decay ─────────────────────────────────────────────────
@@ -720,12 +774,15 @@ pub struct ConcentrationDecayParams {
 }
 
 pub async fn concentration_decay_page(
+    State(state): State<AppState>,
     Query(params): Query<ConcentrationDecayParams>,
 ) -> Html<String> {
     use crate::portfolio::selling::SellingProgramme;
     use crate::web::charts::{concentration_decay_points, concentration_decay_svg};
 
+    let user_inputs = params.shares.is_some() && params.price.is_some();
     let ticker = params.ticker.unwrap_or_else(|| "AMZN".into());
+    let ticker_esc = html_escape(&ticker);
     let shares = params.shares.unwrap_or(1000.0);
     let price = params.price.unwrap_or(200.0);
     let other_value = params.other_value.unwrap_or(50_000.0);
@@ -750,7 +807,15 @@ pub async fn concentration_decay_page(
         other_value,
         start_year,
     );
-    let chart = concentration_decay_svg(&points, 700, 350);
+    let chart = accessible(
+        &concentration_decay_svg(&points, 700, 350),
+        "Projected portfolio volatility decay",
+        &format!(
+            "Line chart of estimated annual volatility in percent over time, falling from {:.1}% at the start to {:.1}% as the concentrated position is sold down.",
+            points.first().map(|p| p.estimated_annual_vol).unwrap_or(0.0),
+            points.last().map(|p| p.estimated_annual_vol).unwrap_or(0.0),
+        ),
+    );
 
     let first_vol = points
         .first()
@@ -763,8 +828,13 @@ pub async fn concentration_decay_page(
         0.0
     };
 
+    let banner = if user_inputs {
+        ""
+    } else {
+        illustrative_banner()
+    };
     let body = format!(
-        r#"<h2>Concentration Decay — {ticker}</h2>
+        r#"{banner}<h2>Concentration Decay — {ticker_esc}</h2>
 <p>Projected portfolio volatility reduction as concentration decreases over {years} year(s).</p>
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
   <div><strong>Starting weight:</strong> {:.1}%</div>
@@ -772,7 +842,7 @@ pub async fn concentration_decay_page(
   <div><strong>Vol reduction:</strong> {:.1}%</div>
 </div>
 <div class="chart-container">{chart}</div>
-<details><summary>Quarterly breakdown</summary><table><caption class="sr-only">Quarterly breakdown of weight, estimated volatility and shares left</caption>
+<details><summary>Table view: quarterly breakdown</summary><table><caption class="sr-only">Quarterly breakdown of weight, estimated volatility and shares left</caption>
 <thead><tr><th scope="col">Quarter</th><th scope="col">Weight</th><th scope="col">Est. Vol</th><th scope="col">Shares Left</th></tr></thead>
 <tbody>{rows}</tbody></table></details>"#,
         starting_weight * 100.0,
@@ -790,7 +860,7 @@ pub async fn concentration_decay_page(
             .collect::<String>(),
     );
 
-    Html(shell("/concentration-decay", "Concentration Decay", &body))
+    page(&state, "/concentration-decay", "Concentration Decay", &body).await
 }
 
 // ─── 11. Allocation ──────────────────────────────────────────────────────────
@@ -802,7 +872,10 @@ pub struct AllocationParams {
     pub portfolio_value: Option<f64>,
 }
 
-pub async fn allocation_page(Query(params): Query<AllocationParams>) -> Html<String> {
+pub async fn allocation_page(
+    State(state): State<AppState>,
+    Query(params): Query<AllocationParams>,
+) -> Html<String> {
     use crate::portfolio::allocation::{
         blended_expense_ratio, brokerage_catalog, map_to_funds, risk_profiles, Brokerage,
     };
@@ -846,14 +919,14 @@ pub async fn allocation_page(Query(params): Query<AllocationParams>) -> Html<Str
 <thead><tr><th scope="col">Asset Class</th><th scope="col">Ticker</th><th scope="col">Fund</th><th scope="col">ER</th><th scope="col">Amount</th><th scope="col">TLH Partner</th><th scope="col">Transferable</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
-<p style="color:#888;font-size:0.85em">Try: <code>/allocation?brokerage=schwab&amp;profile=aggressive&amp;portfolio_value=1000000</code></p>"#,
+<p class="hint">Try: <code>/allocation?brokerage=schwab&amp;profile=aggressive&amp;portfolio_value=1000000</code></p>"#,
         desc = profile.description,
         brok = catalog.brokerage,
         pv = portfolio_value,
         er = blended_er * 100.0,
     );
 
-    Html(shell("/allocation", "Target Allocation", &body))
+    page(&state, "/allocation", "Target Allocation", &body).await
 }
 
 // ─── 12. Geopolitical Risk ──────────────────────────────────────────────────
@@ -866,7 +939,10 @@ pub struct GeoRiskParams {
     pub dxy_3m: Option<f64>,
 }
 
-pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> {
+pub async fn geo_risk_page(
+    State(state): State<AppState>,
+    Query(params): Query<GeoRiskParams>,
+) -> Html<String> {
     use crate::analysis::geopolitical::{
         compute_geo_risk, geo_allocation_adjustments, GeoRiskInputs,
     };
@@ -881,11 +957,11 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
     let score = compute_geo_risk(&inputs);
     let adjustments = geo_allocation_adjustments(&score.level);
 
-    let level_color = match &score.level {
-        crate::analysis::geopolitical::GeoRiskLevel::Low => "#51cf66",
-        crate::analysis::geopolitical::GeoRiskLevel::Moderate => "#ffd43b",
-        crate::analysis::geopolitical::GeoRiskLevel::High => "#ff922b",
-        crate::analysis::geopolitical::GeoRiskLevel::Extreme => "#ff6b6b",
+    let level_class = match &score.level {
+        crate::analysis::geopolitical::GeoRiskLevel::Low => "risk-low",
+        crate::analysis::geopolitical::GeoRiskLevel::Moderate => "risk-moderate",
+        crate::analysis::geopolitical::GeoRiskLevel::High => "risk-high",
+        crate::analysis::geopolitical::GeoRiskLevel::Extreme => "risk-extreme",
     };
 
     let adj_rows: String = if adjustments.is_empty() {
@@ -918,14 +994,14 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
   <div>Gold: <strong>{:.2}</strong>/2.5</div>
   <div>DXY: <strong>{:.2}</strong>/2.5</div>
 </div>
-<p><strong>Composite Score:</strong> <span style="font-size:1.5em;color:{level_color}">{:.1}/10</span>
-   — <strong style="color:{level_color}">{}</strong></p>
+<p><strong>Composite Score:</strong> <span class="risk-score {level_class}">{:.1}/10</span>
+   — <strong class="{level_class}">{}</strong></p>
 <h2>Suggested Allocation Adjustments</h2>
 <table><caption class="sr-only">Suggested allocation adjustments by sector</caption>
 <thead><tr><th scope="col">Sector</th><th scope="col">Adjustment</th></tr></thead>
 <tbody>{adj_rows}</tbody>
 </table>
-<p style="color:#888;font-size:0.85em">Try: <code>/geo-risk?oil=130&amp;vix=32&amp;gold_3m=0.15&amp;dxy_3m=-0.05</code></p>"#,
+<p class="hint">Try: <code>/geo-risk?oil=130&amp;vix=32&amp;gold_3m=0.15&amp;dxy_3m=-0.05</code></p>"#,
         inputs.oil_brent,
         inputs.vix,
         inputs.gold_3m_change * 100.0,
@@ -938,12 +1014,12 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
         score.level,
     );
 
-    Html(shell("/geo-risk", "Geopolitical Risk Assessment", &body))
+    page(&state, "/geo-risk", "Geopolitical Risk Assessment", &body).await
 }
 
 // ─── Rotation Page ──────────────────────────────────────────────────────────
 
-pub async fn rotation_page() -> Html<String> {
+pub async fn rotation_page(State(state): State<AppState>) -> Html<String> {
     use crate::data::models::MarketRegime;
     use crate::portfolio::rotation::{
         compute_deployment_score, compute_sell_pressure, CdsInput, SpsAction, SpsInput,
@@ -1084,14 +1160,14 @@ pub async fn rotation_page() -> Html<String> {
     for (ticker, input) in &positions {
         let result = compute_sell_pressure(ticker, input, &regime);
         let (action_label, action_color) = match &result.action {
-            SpsAction::Green => ("GREEN", "#51cf66"),
-            SpsAction::Yellow => ("YELLOW", "#ffd43b"),
-            SpsAction::Orange => ("ORANGE", "#ff922b"),
-            SpsAction::Red => ("RED", "#ff6b6b"),
-            SpsAction::Critical => ("CRIT", "#e03131"),
+            SpsAction::Green => ("GREEN", "sps-green"),
+            SpsAction::Yellow => ("YELLOW", "sps-yellow"),
+            SpsAction::Orange => ("ORANGE", "sps-orange"),
+            SpsAction::Red => ("RED", "sps-red"),
+            SpsAction::Critical => ("CRIT", "sps-critical"),
         };
         rows.push_str(&format!(
-            "<tr><td><strong>{}</strong></td><td>{:.1}</td><td><span style='background:{};color:#000;padding:2px 8px;border-radius:4px;font-size:0.8em'>{}</span></td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td></tr>",
+            "<tr><td><strong>{}</strong></td><td>{:.1}</td><td><span class=\"sps {}\">{}</span></td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td><td>{:.0}</td></tr>",
             ticker, result.sps, action_color, action_label,
             result.components.trend_decay, result.components.momentum_fade,
             result.components.drawdown_penalty, result.components.relative_weakness,
@@ -1111,8 +1187,9 @@ pub async fn rotation_page() -> Html<String> {
         breadth_pct: 55.0,
     });
 
+    let banner = illustrative_banner();
     let body = format!(
-        r#"
+        r#"{banner}
 <p>Regime: <strong>Sideways</strong> | Target weight: 12.5% per position</p>
 
 <h2>Sell Pressure Scores</h2>
@@ -1140,12 +1217,12 @@ pub async fn rotation_page() -> Html<String> {
         cds.drawdown_risk
     );
 
-    Html(shell("/rotation", "Capital Rotation Analysis", &body))
+    page(&state, "/rotation", "Capital Rotation Analysis", &body).await
 }
 
 // ─── Sizing Page ────────────────────────────────────────────────────────────
 
-pub async fn sizing_page() -> Html<String> {
+pub async fn sizing_page(State(state): State<AppState>) -> Html<String> {
     use crate::analysis::scorer::Grade;
     use crate::data::models::MarketRegime;
     use crate::portfolio::sizing::{compute_position_size, SizingInput, SizingMethod};
@@ -1184,8 +1261,9 @@ pub async fn sizing_page() -> Html<String> {
         ));
     }
 
+    let banner = illustrative_banner();
     let body = format!(
-        r#"
+        r#"{banner}
 <p>Portfolio: <strong>${:.0}</strong> | Method: VolatilityTarget (2x ATR) | Risk: 1% | Max: 15%</p>
 
 <table><caption class="sr-only">Recommended position sizes: shares, amount and risk in USD</caption>
@@ -1206,7 +1284,7 @@ pub async fn sizing_page() -> Html<String> {
         portfolio
     );
 
-    Html(shell("/sizing", "Position Sizing", &body))
+    page(&state, "/sizing", "Position Sizing", &body).await
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

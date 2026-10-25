@@ -214,3 +214,229 @@ pub fn asset_sha256_hex(name: &str) -> String {
         .map(|b| format!("{b:02x}"))
         .collect()
 }
+
+// ─────────────────────────── seeded fixtures (batch 2) ───────────────────────────
+
+use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
+use ghost_alpha::alerts::channel::OutboundAlert;
+use ghost_alpha::analysis::indicators::LiquidityClass;
+use ghost_alpha::analysis::macro_risk::{MacroRiskLevel, MacroRiskSnapshot};
+use ghost_alpha::analysis::scorer::Grade;
+use ghost_alpha::analysis::screener::ScreenResult;
+use ghost_alpha::data::models::{MarketRegime, RegimeState, Severity};
+use ghost_alpha::storage::db::Repository;
+
+pub fn today() -> NaiveDate {
+    Utc::now().date_naive()
+}
+
+fn is_weekday(d: NaiveDate) -> bool {
+    !matches!(d.weekday(), Weekday::Sat | Weekday::Sun)
+}
+
+/// Weekdays (Mon-Fri) in the half-open interval `(from, to]`; the rule the dashboard pins
+/// for "trading days". Test-owned copy so fixtures do not depend on the implementation.
+pub fn weekdays_between(from: NaiveDate, to: NaiveDate) -> u32 {
+    let mut n = 0;
+    let mut d = from;
+    while d < to {
+        d += Duration::days(1);
+        if is_weekday(d) {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// A weekday `d <= today` with exactly `age` weekdays in `(d, today]`.
+pub fn date_with_age(today: NaiveDate, age: u32) -> NaiveDate {
+    let mut d = today;
+    loop {
+        if is_weekday(d) && weekdays_between(d, today) == age {
+            return d;
+        }
+        d -= Duration::days(1);
+        assert!(today - d < Duration::days(60), "no date with age {age}");
+    }
+}
+
+pub fn screen_result(ticker: &str, score: f64, grade: Grade, regime: MarketRegime) -> ScreenResult {
+    ScreenResult {
+        ticker: ticker.to_string(),
+        minervini_pass: true,
+        conditions_met: 7,
+        adx: 28.0,
+        rs_percentile: 40.0 + score / 2.0,
+        volume_zscore: 1.5,
+        technical_score: 75.0,
+        volume_score: 80.0,
+        sentiment_score: 0.3,
+        composite_score: score,
+        grade,
+        close_price: 175.0,
+        pct_from_52w_high: -3.2,
+        atr_value: 4.5,
+        risk_reward: 2.0,
+        liquidity: LiquidityClass::High,
+        weighted_rs: 0.9,
+        rs_momentum: Some(score / 10.0 - 5.0),
+        vcp: None,
+        regime,
+    }
+}
+
+/// Seed one screen run per tickers on `date`.
+pub fn seed_screen_run(repo: &SqliteRepository, date: NaiveDate) {
+    let rows = [
+        ("AAPL", 82.0, Grade::A),
+        ("MSFT", 71.0, Grade::B),
+        ("NVDA", 91.0, Grade::APlus),
+    ];
+    for (t, s, g) in rows {
+        repo.save_screen_result(date, &screen_result(t, s, g, MarketRegime::Bull))
+            .unwrap();
+    }
+}
+
+/// Everything needed for pages and partials to render real tables and charts.
+pub fn seed_full(repo: &SqliteRepository, today: NaiveDate) {
+    for back in 0..6 {
+        let d = today - Duration::days(back);
+        let rows = [
+            ("AAPL", 82.0 - back as f64, Grade::A),
+            ("MSFT", 71.0 + back as f64, Grade::B),
+            ("NVDA", 91.0 - 2.0 * back as f64, Grade::APlus),
+            ("XOM", 40.0 + back as f64, Grade::D),
+        ];
+        for (t, s, g) in rows {
+            repo.save_screen_result(d, &screen_result(t, s, g, MarketRegime::Bull))
+                .unwrap();
+        }
+    }
+    for back in 0..12 {
+        let regime = match back / 4 {
+            0 => MarketRegime::Bull,
+            1 => MarketRegime::Sideways,
+            _ => MarketRegime::Bear,
+        };
+        repo.save_regime(&RegimeState {
+            date: today - Duration::days(back),
+            spy_close: 500.0 + back as f64 * 2.0,
+            spy_sma200: 480.0,
+            breadth_pct: 55.0,
+            regime,
+        })
+        .unwrap();
+    }
+    for back in 0..5 {
+        repo.save_macro_risk(
+            today - Duration::days(back),
+            &MacroRiskSnapshot {
+                vix_level: 15.0 + back as f64,
+                hy_oas_bps: Some(350.0),
+                yield_curve_2s10s: Some(0.4),
+                put_call_ratio: Some(0.9),
+                risk_level: MacroRiskLevel::Normal,
+            },
+        )
+        .unwrap();
+    }
+    for (t, sev) in [
+        ("AAPL", Severity::Critical),
+        ("MSFT", Severity::Warning),
+        ("NVDA", Severity::Info),
+    ] {
+        repo.record_alert(&OutboundAlert {
+            ticker: t.to_string(),
+            alert_type: "score_drop".to_string(),
+            severity: sev,
+            message: format!("{t} score changed"),
+            composite_score: 70.0,
+            narrative: None,
+        })
+        .unwrap();
+    }
+    repo.watchlist_add("AAPL", Some("core")).unwrap();
+    repo.watchlist_add("NVDA", None).unwrap();
+    repo.save_correlation_snapshot(
+        &today.to_string(),
+        &["AAPL".to_string(), "MSFT".to_string(), "NVDA".to_string()],
+        &[
+            vec![1.0, 0.6, 0.7],
+            vec![0.6, 1.0, 0.5],
+            vec![0.7, 0.5, 1.0],
+        ],
+        90,
+    )
+    .unwrap();
+    let conn = repo.connection().unwrap();
+    // Calendar heatmap ignores weekends, so back-date some alerts onto weekdays.
+    for (k, sev) in [(1, "CRITICAL"), (2, "WARNING"), (3, "INFO")] {
+        let day = date_with_age(today, k);
+        conn.execute(
+            "INSERT INTO alert_log (ticker, alert_type, severity, message, sent_at) \
+             VALUES ('AAPL', ?1, ?2, 'calendar fixture', ?3)",
+            rusqlite::params![format!("cal-{k}"), sev, format!("{day} 12:00:00")],
+        )
+        .unwrap();
+    }
+    for (id, t, sh, cb) in [
+        ("lot-1", "AMZN", 100.0, 120.0),
+        ("lot-2", "VTI", 50.0, 200.0),
+    ] {
+        conn.execute(
+            "INSERT INTO tax_lots (id, ticker, shares, cost_basis_per_share, acquired_date, \
+             acquisition_type, remaining_shares) VALUES (?1, ?2, ?3, ?4, '2022-01-03', 'BUY', ?3)",
+            rusqlite::params![id, t, sh, cb],
+        )
+        .unwrap();
+    }
+}
+
+pub fn app_with(seed: impl FnOnce(&SqliteRepository)) -> Router {
+    let repo = SqliteRepository::open_in_memory().expect("in-memory db");
+    seed(&repo);
+    let config: AppConfig = toml::from_str("").unwrap();
+    create_router(AppState {
+        repo: Arc::new(repo),
+        config: Arc::new(config),
+    })
+}
+
+pub fn seeded_app() -> Router {
+    app_with(|r| seed_full(r, today()))
+}
+
+/// Full-page routes (from NAV via router parse) and all GET partials.
+pub fn all_get_paths() -> Vec<String> {
+    let mut v = page_routes();
+    v.extend(partial_routes());
+    v
+}
+
+/// Text of the element opened by `open_tag` (a tag string found in `html`).
+pub fn element_text(html: &str, open_tag: &str) -> String {
+    let start = html.find(open_tag).expect("tag in html") + open_tag.len();
+    let name: String = open_tag[1..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let end = html[start..]
+        .find(&format!("</{name}>"))
+        .expect("closing tag")
+        + start;
+    strip_tags(&html[start..end])
+}
+
+/// Every `<svg ...>...</svg>` slice.
+pub fn svgs(html: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(i) = rest.find("<svg") {
+        let a = &rest[i..];
+        let e = a.find("</svg>").map(|e| e + 6).unwrap_or(a.len());
+        out.push(a[..e].to_string());
+        rest = &a[e..];
+    }
+    out
+}
