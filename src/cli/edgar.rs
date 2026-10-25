@@ -176,7 +176,23 @@ pub async fn run(cmd: EdgarCommand, config_user_agent: Option<&str>) -> Result<(
                 .await
                 .with_context(|| format!("edgar facts failed for {ticker}"))?;
             let rows = facts.series(&taxonomy, &concept, &unit, periodicity.into(), as_of);
-            if let Some(hint) = missing_hint(&facts, &taxonomy, &concept, &unit) {
+            let periodicity: Periodicity = periodicity.into();
+            let hint = missing_hint(&facts, &taxonomy, &concept, &unit).or_else(|| {
+                if rows.is_empty() {
+                    form_hint(&facts, &taxonomy, &concept, &unit, periodicity)
+                } else {
+                    stale_hint(
+                        &facts,
+                        &taxonomy,
+                        &concept,
+                        &unit,
+                        periodicity,
+                        as_of,
+                        &rows,
+                    )
+                }
+            });
+            if let Some(hint) = hint {
                 eprintln!("{hint}");
             }
             match format {
@@ -200,23 +216,29 @@ pub async fn run(cmd: EdgarCommand, config_user_agent: Option<&str>) -> Result<(
                 .resolve_cik(&ticker)
                 .await
                 .with_context(|| format!("edgar filings failed for {ticker}"))?;
-            let filings = client
-                .filings(cik.as_str(), form.as_deref(), item.as_deref(), since)
+            let report = client
+                .filings_report(cik.as_str(), form.as_deref(), item.as_deref(), since)
                 .await
                 .with_context(|| format!("edgar filings failed for {ticker}"))?;
-            if since.is_none() {
-                if let Some(note) = coverage_note(&client, cik.as_str()).await? {
-                    eprintln!("{note}");
+            for w in &report.warnings {
+                eprintln!("warning: {w}");
+            }
+            if since.is_none() && report.older_pages_exist {
+                if let Some(oldest) = report.oldest_recent {
+                    eprintln!(
+                        "note: showing only the most recent filings (back to {oldest}); older filings exist. \
+                         Use --since YYYY-MM-DD to search further back."
+                    );
                 }
             }
             match format {
                 EdgarFormat::Json => {
                     println!(
                         "{}",
-                        serde_json::to_string_pretty(&filings_json(&cik, &filings))?
+                        serde_json::to_string_pretty(&filings_json(&cik, &report.filings))?
                     )
                 }
-                EdgarFormat::Table => print!("{}", render_filings_table(&cik, &filings)),
+                EdgarFormat::Table => print!("{}", render_filings_table(&cik, &report.filings)),
             }
         }
     }
@@ -274,19 +296,92 @@ fn missing_hint(facts: &CompanyFacts, taxonomy: &str, concept: &str, unit: &str)
     }
 }
 
-/// Stderr note when only `recent` was searched but older filings exist.
-async fn coverage_note(client: &EdgarClient, cik: &str) -> Result<Option<String>> {
-    if client.older_pages(cik).await?.is_empty() {
-        return Ok(None);
+/// Window (in days) within which a concept counts as current for `periodicity`.
+fn recency_days(periodicity: Periodicity) -> i64 {
+    match periodicity {
+        Periodicity::Annual => 2 * 365,
+        Periodicity::Quarterly => 365,
     }
-    let recent = client.submissions(cik).await?;
-    let Some(oldest) = recent.iter().map(|f| f.filing_date).min() else {
-        return Ok(None);
+}
+
+/// Stderr note when a non-empty series ends long before the filer's latest
+/// periodic filing (the filer switched to another concept), listing active
+/// alternatives in the same taxonomy and unit.
+fn stale_hint(
+    facts: &CompanyFacts,
+    taxonomy: &str,
+    concept: &str,
+    unit: &str,
+    periodicity: Periodicity,
+    as_of: NaiveDate,
+    rows: &[&Fact],
+) -> Option<String> {
+    let last_end = rows.last()?.end;
+    let latest = facts.latest_periodic_filing(as_of)?;
+    let window = chrono::Duration::days(recency_days(periodicity));
+    if latest - last_end <= window {
+        return None;
+    }
+    let revenue_like = concept.contains("Revenue") || concept.contains("Sales");
+    let shared = |name: &str| {
+        name.chars()
+            .zip(concept.chars())
+            .take_while(|(a, b)| a == b)
+            .count()
     };
-    Ok(Some(format!(
-        "note: showing only the most recent filings (back to {oldest}); older filings exist. \
-         Use --since YYYY-MM-DD to search further back."
-    )))
+    let instant = rows.last()?.start.is_none();
+    // Candidates must have the same shape (duration vs instant) and a series of
+    // their own for this periodicity that is still current.
+    let mut alternatives: Vec<&str> = facts
+        .concepts(taxonomy)
+        .into_iter()
+        .filter(|c| *c != concept && (shared(c) >= 8 || (revenue_like && c.contains("Revenue"))))
+        .filter(|c| {
+            let alt = facts.series(taxonomy, c, unit, periodicity, as_of);
+            alt.last()
+                .is_some_and(|l| l.start.is_none() == instant && latest - l.end <= window)
+        })
+        .collect();
+    alternatives.sort_by(|a, b| {
+        let rev = |n: &str| revenue_like && n.starts_with("Revenue");
+        shared(b)
+            .cmp(&shared(a))
+            .then_with(|| rev(b).cmp(&rev(a)))
+            .then_with(|| a.cmp(b))
+    });
+    alternatives.truncate(5);
+    let mut msg = format!(
+        "note: {concept} stops at {last_end} but the filer's latest 10-K/10-Q was filed {latest}; \
+         it probably switched concepts."
+    );
+    if !alternatives.is_empty() {
+        msg.push_str(&format!(" Try: {}", alternatives.join(", ")));
+    }
+    Some(msg)
+}
+
+/// Stderr explanation when the concept has facts, but none from the forms the
+/// periodicity accepts (e.g. a 20-F filer).
+fn form_hint(
+    facts: &CompanyFacts,
+    taxonomy: &str,
+    concept: &str,
+    unit: &str,
+    periodicity: Periodicity,
+) -> Option<String> {
+    let present = facts.forms(taxonomy, concept, unit);
+    let (label, used): (&str, [&str; 2]) = match periodicity {
+        Periodicity::Annual => ("annual", ["10-K", "10-K/A"]),
+        Periodicity::Quarterly => ("quarterly", ["10-Q", "10-Q/A"]),
+    };
+    if present.is_empty() || present.iter().any(|f| used.contains(f)) {
+        return None;
+    }
+    Some(format!(
+        "note: {concept} ({unit}) is reported only on forms {}; the {label} series uses {}.",
+        present.join(", "),
+        used.join(" or ")
+    ))
 }
 
 fn render_facts_table(

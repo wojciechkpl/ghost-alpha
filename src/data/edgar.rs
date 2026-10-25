@@ -33,6 +33,8 @@ const MAX_RETRY_AFTER: Duration = Duration::from_secs(60);
 /// Upper bound for exponential backoff growth.
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// How far in the future a cache file's mtime may be and still count as fresh.
+const FUTURE_MTIME_TOLERANCE: Duration = Duration::from_secs(300);
 const MAX_SUGGESTIONS: usize = 5;
 
 /// How to fix a missing or malformed User-Agent; appended to the related errors.
@@ -390,6 +392,31 @@ impl CompanyFacts {
         v
     }
 
+    /// Distinct forms (sorted) that reported a concept/unit, on any date.
+    pub fn forms(&self, taxonomy: &str, concept: &str, unit: &str) -> Vec<&str> {
+        let mut v: Vec<&str> = self
+            .facts(taxonomy, concept, unit)
+            .iter()
+            .map(|f| f.form.as_str())
+            .collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
+
+    /// Latest `filed` date <= `as_of` over every 10-K/10-Q (and amendment) fact of
+    /// the company: a proxy for when the filer last reported periodic results.
+    pub fn latest_periodic_filing(&self, as_of: NaiveDate) -> Option<NaiveDate> {
+        self.facts
+            .values()
+            .flat_map(|concepts| concepts.values())
+            .flat_map(|units| units.values())
+            .flatten()
+            .filter(|f| f.filed <= as_of && is_periodic_form(&f.form))
+            .map(|f| f.filed)
+            .max()
+    }
+
     /// The value for `period` as known on `as_of`.
     ///
     /// `as_of` is inclusive: a fact filed on `as_of` is visible. For
@@ -446,6 +473,10 @@ impl CompanyFacts {
         }
         by_end.into_values().collect()
     }
+}
+
+fn is_periodic_form(form: &str) -> bool {
+    matches!(form, "10-K" | "10-K/A" | "10-Q" | "10-Q/A")
 }
 
 fn matches_periodicity(f: &Fact, p: Periodicity) -> bool {
@@ -764,6 +795,37 @@ impl EdgarConfig {
     }
 }
 
+/// Result of [`EdgarClient::filings_report`].
+#[derive(Debug, Clone, Default)]
+pub struct FilingsReport {
+    /// Matching filings, newest first.
+    pub filings: Vec<Filing>,
+    /// Human-readable notes about older pages that were skipped (bad name or fetch error).
+    pub warnings: Vec<String>,
+    /// True if SEC lists older pages beyond `recent` (fetched only when `since` is given).
+    pub older_pages_exist: bool,
+    /// Oldest filing date in the `recent` list, if any.
+    pub oldest_recent: Option<NaiveDate>,
+}
+
+/// Parse `recent` rows and the older-page list from one submissions body.
+fn parse_submissions_doc(json: &str) -> Result<(Vec<Filing>, Vec<SubmissionPage>), EdgarError> {
+    Ok((parse_submissions(json)?, parse_submissions_files(json)?))
+}
+
+/// Only `CIK##########-submissions-###.json` is ever requested or cached: the
+/// name comes from a remote document and is used in a URL and a file path.
+fn is_valid_page_name(name: &str) -> bool {
+    // Byte-wise on purpose: names are remote input and may contain multibyte characters.
+    let b = name.as_bytes();
+    b.len() == 34
+        && b.starts_with(b"CIK")
+        && b[3..13].iter().all(u8::is_ascii_digit)
+        && &b[13..26] == b"-submissions-"
+        && b[26..29].iter().all(u8::is_ascii_digit)
+        && &b[29..] == b".json"
+}
+
 // ─── Client ───────────────────────────────────────────────────────────────────
 
 type Limiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
@@ -875,23 +937,10 @@ impl EdgarClient {
         self.get_cached(&url, &key, parse_submissions).await
     }
 
-    /// Older submission pages (beyond `recent`) listed for a ticker or CIK.
-    pub async fn older_pages(
-        &self,
-        ticker_or_cik: &str,
-    ) -> Result<Vec<SubmissionPage>, EdgarError> {
-        let cik = self.resolve_cik(ticker_or_cik).await?;
-        let url = format!("{}/submissions/CIK{cik}.json", self.data_base);
-        let key = self.data_key(&format!("submissions_CIK{cik}.json"));
-        self.get_cached(&url, &key, parse_submissions_files).await
-    }
-
     /// Filings filtered by exact `form`, 8-K `item`, and inclusive `since` filing date.
     ///
-    /// SEC's index only embeds the ~1000 most recent filings (`recent`). With
-    /// `since`, every older page that reaches back to `since` is fetched too
-    /// (pages entirely older are skipped). Without `since`, only `recent` is
-    /// searched. Results stay in SEC order (newest first).
+    /// Convenience wrapper over [`EdgarClient::filings_report`] that drops the
+    /// report details; skipped-page warnings are logged via `tracing`.
     pub async fn filings(
         &self,
         ticker_or_cik: &str,
@@ -899,15 +948,70 @@ impl EdgarClient {
         item: Option<&str>,
         since: Option<NaiveDate>,
     ) -> Result<Vec<Filing>, EdgarError> {
-        let mut all = self.submissions(ticker_or_cik).await?;
+        let report = self
+            .filings_report(ticker_or_cik, form, item, since)
+            .await?;
+        for w in &report.warnings {
+            tracing::warn!("{w}");
+        }
+        Ok(report.filings)
+    }
+
+    /// Like [`EdgarClient::filings`], but also reports what was skipped and
+    /// whether the result may be incomplete.
+    ///
+    /// SEC's index only embeds the ~1000 most recent filings (`recent`). With
+    /// `since`, every older page that reaches back to `since` is fetched too
+    /// (pages entirely older are skipped); without `since`, only `recent` is
+    /// searched. The main submissions document is requested once per call.
+    /// A failing main document is an error; a failing or invalidly named older
+    /// page is skipped and described in [`FilingsReport::warnings`]. Results
+    /// stay in SEC order (newest first).
+    pub async fn filings_report(
+        &self,
+        ticker_or_cik: &str,
+        form: Option<&str>,
+        item: Option<&str>,
+        since: Option<NaiveDate>,
+    ) -> Result<FilingsReport, EdgarError> {
+        let cik = self.resolve_cik(ticker_or_cik).await?;
+        let url = format!("{}/submissions/CIK{cik}.json", self.data_base);
+        let key = self.data_key(&format!("submissions_CIK{cik}.json"));
+        let (mut all, pages) = self.get_cached(&url, &key, parse_submissions_doc).await?;
+        let mut report = FilingsReport {
+            older_pages_exist: !pages.is_empty(),
+            oldest_recent: all.iter().map(|f| f.filing_date).min(),
+            ..FilingsReport::default()
+        };
         if let Some(since) = since {
-            for page in self.older_pages(ticker_or_cik).await? {
-                if page.filing_to < since {
+            let wanted: Vec<SubmissionPage> =
+                pages.into_iter().filter(|p| p.filing_to >= since).collect();
+            for (i, page) in wanted.iter().enumerate() {
+                if !is_valid_page_name(&page.name) {
+                    report.warnings.push(format!(
+                        "skipping submissions page with invalid name {:?}",
+                        page.name
+                    ));
                     continue;
                 }
                 let url = format!("{}/submissions/{}", self.data_base, page.name);
                 let key = self.data_key(&page.name);
-                all.extend(self.get_cached(&url, &key, parse_submissions).await?);
+                match self.get_cached(&url, &key, parse_submissions).await {
+                    Ok(rows) => all.extend(rows),
+                    Err(EdgarError::Forbidden { .. }) => {
+                        report.warnings.push(format!(
+                            "SEC returned 403 for {}; remaining {} older pages skipped \
+                             (wait about 10 minutes and retry)",
+                            page.name,
+                            wanted.len() - i
+                        ));
+                        break;
+                    }
+                    Err(e) => report.warnings.push(format!(
+                        "skipping older submissions page {}: {e}",
+                        page.name
+                    )),
+                }
             }
             // Stable: keeps SEC order within a day, restores newest-first across pages.
             all.sort_by_key(|a| std::cmp::Reverse(a.filing_date));
@@ -917,7 +1021,8 @@ impl EdgarClient {
                 && item.is_none_or(|x| f.has_item(x))
                 && since.is_none_or(|d| f.filing_date >= d)
         });
-        Ok(all)
+        report.filings = all;
+        Ok(report)
     }
 
     /// Resolve a ticker or all-digit CIK string to a [`Cik`] (digits skip the ticker lookup).
@@ -979,8 +1084,13 @@ impl EdgarClient {
         std::fs::metadata(path)
             .and_then(|m| m.modified())
             .ok()
-            // An mtime slightly in the future (clock skew, coarse timestamps) counts as age zero.
-            .map(|t| t.elapsed().unwrap_or(Duration::ZERO))
+            // An mtime up to 5 minutes in the future (clock skew, coarse timestamps)
+            // counts as age zero; further ahead is untrustworthy, so treat as stale.
+            .and_then(|t| match t.elapsed() {
+                Ok(age) => Some(age),
+                Err(e) if e.duration() <= FUTURE_MTIME_TOLERANCE => Some(Duration::ZERO),
+                Err(_) => None,
+            })
             .is_some_and(|age| age < ttl)
     }
 

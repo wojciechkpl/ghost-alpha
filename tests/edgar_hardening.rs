@@ -371,3 +371,48 @@ async fn test_cache_when_entry_mtime_is_older_than_ttl_should_refetch() {
     assert_eq!(hits(&e.data, FACTS).await, 2);
     assert_eq!(hits(&e.www, TICKERS).await, 2);
 }
+
+// ── F4: how far into the future an mtime may be and still count as fresh ─────
+
+#[tokio::test]
+async fn test_cache_when_entry_mtime_is_a_few_minutes_in_the_future_should_still_be_fresh() {
+    let e = Env::new().await;
+    e.serve_ok("Example Corp").await;
+    let tmp = TempDir::new().unwrap();
+    e.client_in(tmp.path(), 24)
+        .company_facts("EXMP")
+        .await
+        .unwrap();
+    let future = std::time::SystemTime::now() + Duration::from_secs(4 * 60);
+    assert!(set_mtime_all(&tmp.path().join("c"), future) >= 2);
+    e.client_in(tmp.path(), 24)
+        .company_facts("EXMP")
+        .await
+        .unwrap();
+    assert_eq!(hits(&e.data, FACTS).await, 1);
+    assert_eq!(hits(&e.www, TICKERS).await, 1);
+}
+
+#[tokio::test]
+async fn test_cache_when_entry_mtime_is_far_in_the_future_should_be_treated_as_stale() {
+    for offset in [
+        Duration::from_secs(24 * 3600),
+        Duration::from_secs(4 * 365 * 24 * 3600),
+    ] {
+        let e = Env::new().await;
+        e.serve_ok("Example Corp").await;
+        let tmp = TempDir::new().unwrap();
+        e.client_in(tmp.path(), 24)
+            .company_facts("EXMP")
+            .await
+            .unwrap();
+        let future = std::time::SystemTime::now() + offset;
+        assert!(set_mtime_all(&tmp.path().join("c"), future) >= 2);
+        e.client_in(tmp.path(), 24)
+            .company_facts("EXMP")
+            .await
+            .unwrap();
+        assert_eq!(hits(&e.data, FACTS).await, 2, "offset {offset:?}");
+        assert_eq!(hits(&e.www, TICKERS).await, 2, "offset {offset:?}");
+    }
+}
