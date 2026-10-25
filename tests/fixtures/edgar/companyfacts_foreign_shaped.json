@@ -1,0 +1,46 @@
+{
+ "cik": 999999,
+ "entityName": "Overseas Example plc (fictional)",
+ "facts": {
+  "us-gaap": {
+   "Revenues": {
+    "label": "Revenues",
+    "description": "Fictional fixture.",
+    "units": {
+     "USD": [
+      {
+       "start": "2022-01-01",
+       "end": "2022-12-31",
+       "val": 500,
+       "accn": "0000999999-23-000050",
+       "fy": 2022,
+       "fp": "FY",
+       "form": "20-F",
+       "filed": "2023-04-20"
+      },
+      {
+       "start": "2023-01-01",
+       "end": "2023-12-31",
+       "val": 550,
+       "accn": "0000999999-24-000050",
+       "fy": 2023,
+       "fp": "FY",
+       "form": "40-F",
+       "filed": "2024-03-28"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-06-30",
+       "val": 280,
+       "accn": "0000999999-24-000050",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-KT",
+       "filed": "2024-09-01"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

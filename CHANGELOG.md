@@ -12,9 +12,9 @@ All notable changes to GhostAlpha are documented in this file.
 - **Fixed:** the home screen's 60-second refresh no longer resets a chosen past date
 
 ### SEC EDGAR client
-- **New:** `ghost-alpha edgar facts <TICKER>`: point-in-time XBRL company facts. Annual (335-395 day) and quarterly (61-121 day) series; restatements and amendments appear only from their filing date (`--as-of`, inclusive); START and FILING FY/FP columns; stderr hints for unknown concepts or units
-- **New:** `ghost-alpha edgar filings <TICKER>`: filings filtered by `--form`, 8-K `--item` and `--since` (follows older paginated submission pages); `--format table|json`
-- **New:** `ghost_alpha::data::edgar`: ticker→CIK (normalises `BRK.B` → `BRK-B`), `companyfacts`/`submissions` parsers, `Period`-based `value_as_of` with one deterministic winner order (latest filing, same-day amendment over original, higher accession, later start)
+- **New:** `ghost-alpha edgar facts <TICKER>`: point-in-time XBRL company facts. Annual (335-395 day) and quarterly (61-121 day) series; restatements and amendments appear only from their filing date (`--as-of`, inclusive); START and FILING FY/FP columns; stderr hints for unknown concepts or units, stale concepts (with active alternatives) and series emptied by form filtering (e.g. 20-F filers)
+- **New:** `ghost-alpha edgar filings <TICKER>`: filings filtered by `--form`, 8-K `--item` and `--since` (follows older paginated submission pages, skipping a failing page with a warning); `--format table|json`
+- **New:** `ghost_alpha::data::edgar`: ticker→CIK (normalises `BRK.B` → `BRK-B`), `companyfacts`/`submissions` parsers, `Period`-based `value_as_of`, `filings_report` (filings plus warnings; validated page names, one submissions fetch per call), one deterministic winner order (latest filing, same-day amendment over original, higher accession, later start)
 - **New:** SEC fair-access client: 8 req/s limiter, retry with `Retry-After` and jittered backoff, actionable 403 message (never retried), 24h on-disk cache namespaced per host with stale-if-error fallback
 - **New:** SEC requires a User-Agent with a contact email: set `GHOST_ALPHA_EDGAR_USER_AGENT` or `[edgar] user_agent` in config.toml. No API key, Finnhub key or other config needed; an unreadable config.toml only produces a warning
 
