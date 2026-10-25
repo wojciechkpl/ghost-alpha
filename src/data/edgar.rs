@@ -979,7 +979,8 @@ impl EdgarClient {
         std::fs::metadata(path)
             .and_then(|m| m.modified())
             .ok()
-            .and_then(|t| t.elapsed().ok())
+            // An mtime slightly in the future (clock skew, coarse timestamps) counts as age zero.
+            .map(|t| t.elapsed().unwrap_or(Duration::ZERO))
             .is_some_and(|age| age < ttl)
     }
 

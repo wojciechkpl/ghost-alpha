@@ -305,3 +305,69 @@ async fn test_company_facts_when_404_display_should_explain_company_may_not_file
     assert!(low.contains("xbrl"), "{err}");
     assert!(low.contains("may not file"), "{err}");
 }
+
+// ── cache freshness vs. file mtime (Linux CI regression) ─────────────────────
+
+/// Set the mtime of every file under `dir` (recursively) to `t`.
+fn set_mtime_all(dir: &std::path::Path, t: std::time::SystemTime) -> usize {
+    let mut n = 0;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let p = entry.unwrap().path();
+        if p.is_dir() {
+            n += set_mtime_all(&p, t);
+        } else {
+            let f = std::fs::OpenOptions::new().write(true).open(&p).unwrap();
+            f.set_modified(t).unwrap();
+            n += 1;
+        }
+    }
+    n
+}
+
+#[tokio::test]
+async fn test_cache_when_entry_mtime_is_slightly_in_the_future_should_still_be_fresh() {
+    let e = Env::new().await;
+    e.serve_ok("Example Corp").await;
+    let tmp = TempDir::new().unwrap();
+    let c = e.client_in(tmp.path(), 24);
+    c.company_facts("EXMP").await.unwrap();
+    assert_eq!(hits(&e.data, FACTS).await, 1);
+
+    // Clock skew / coarse timestamps: file mtime ahead of "now" by about a minute.
+    let future = std::time::SystemTime::now() + Duration::from_secs(60);
+    assert!(set_mtime_all(&tmp.path().join("c"), future) >= 2);
+
+    let f = e
+        .client_in(tmp.path(), 24)
+        .company_facts("EXMP")
+        .await
+        .unwrap();
+    assert_eq!(f.entity_name, "Example Corp");
+    assert_eq!(
+        hits(&e.data, FACTS).await,
+        1,
+        "future mtime must count as fresh"
+    );
+    assert_eq!(hits(&e.www, TICKERS).await, 1);
+}
+
+#[tokio::test]
+async fn test_cache_when_entry_mtime_is_older_than_ttl_should_refetch() {
+    let e = Env::new().await;
+    e.serve_ok("Example Corp").await;
+    let tmp = TempDir::new().unwrap();
+    e.client_in(tmp.path(), 24)
+        .company_facts("EXMP")
+        .await
+        .unwrap();
+
+    let old = std::time::SystemTime::now() - Duration::from_secs(25 * 3600);
+    assert!(set_mtime_all(&tmp.path().join("c"), old) >= 2);
+
+    e.client_in(tmp.path(), 24)
+        .company_facts("EXMP")
+        .await
+        .unwrap();
+    assert_eq!(hits(&e.data, FACTS).await, 2);
+    assert_eq!(hits(&e.www, TICKERS).await, 2);
+}
