@@ -991,7 +991,7 @@ Find the optimal number of years to spread a sale. The `sell-compare` command fi
 
 ```
 $ ghost-alpha sell-compare --ticker AMZN --shares 3000 --cost-basis 50 --price 250 \
-    --state WA --filing mfj --other-income 200000 --max-years 5
+    --state CA --filing single --other-income 150000 --max-years 5
 
   AMZN — Multi-year scenario comparison (State: WA)
   ────────────────────────────────────────────────────────────────────────
@@ -1058,7 +1058,7 @@ Generate a self-contained client-deliverable report combining all modules:
 
 ```bash
 ghost-alpha div-report --ticker AMZN --shares 2000 --cost-basis 60 --price 215 \
-    --state WA --filing mfj --other-income 200000 --other-value 80000 \
+    --state CA --filing single --other-income 150000 --other-value 80000 \
     --years 2 --brokerage fidelity --profile moderate
 ```
 

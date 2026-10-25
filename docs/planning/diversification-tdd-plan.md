@@ -558,9 +558,9 @@ pub struct SellCompareArgs {
     cost_basis: f64,
     #[arg(long)]
     price: f64,
-    #[arg(long, default_value = "WA")]
+    #[arg(long)]
     state: String,
-    #[arg(long, default_value = "mfj")]
+    #[arg(long, default_value = "single")]
     filing: String,
     #[arg(long, alias = "other-income", default_value_t = 0.0)]
     other_income: f64,
@@ -588,7 +588,7 @@ pub struct SellCompareArgs {
 
 | Test Name | Assertion |
 |---|---|
-| `test_sell_compare_cli_parse` | `SellCompareArgs` parses from: `sell-compare --ticker AMZN --shares 1000 --cost-basis 95 --price 210 --state WA --filing mfj --other-income 200000 --max-years 5` |
+| `test_sell_compare_cli_parse` | `SellCompareArgs` parses from: `sell-compare --ticker AMZN --shares 1000 --cost-basis 95 --price 210 --state CA --filing single --other-income 150000 --max-years 5` |
 
 ### Implementation Notes
 

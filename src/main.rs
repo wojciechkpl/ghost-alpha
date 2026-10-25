@@ -245,7 +245,7 @@ enum Commands {
         #[arg(long, default_value = "single")]
         filing: String,
         /// State code (e.g., WA, CA, TX)
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income (salary, etc.)
         #[arg(long, default_value = "0")]
@@ -281,10 +281,10 @@ enum Commands {
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
         /// Filing status: single or mfj
-        #[arg(long, default_value = "mfj")]
+        #[arg(long, default_value = "single")]
         filing: String,
         /// State code (e.g., WA, CA, TX)
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income (salary, etc.)
         #[arg(long, default_value = "0")]
@@ -332,10 +332,10 @@ enum Commands {
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
         /// Filing status: single or mfj
-        #[arg(long, default_value = "mfj")]
+        #[arg(long, default_value = "single")]
         filing: String,
         /// State code
-        #[arg(long, default_value = "WA")]
+        #[arg(long)]
         state: String,
         /// Other annual income
         #[arg(long, default_value = "200000")]

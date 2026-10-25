@@ -11,6 +11,9 @@ All notable changes to GhostAlpha are documented in this file.
 - **New:** SEC fair-access client: 8 req/s limiter, retry with `Retry-After` and jittered backoff, actionable 403 message (never retried), 24h on-disk cache namespaced per host with stale-if-error fallback
 - **New:** SEC requires a User-Agent with a contact email: set `GHOST_ALPHA_EDGAR_USER_AGENT` or `[edgar] user_agent` in config.toml. No API key, Finnhub key or other config needed; an unreadable config.toml only produces a warning
 
+### Tax CLI defaults
+- **Changed:** `sell-plan`, `sell-compare` and `div-report` no longer assume a state: `--state` is now required. `--filing` defaults to `single` (was `mfj` for `sell-compare` and `div-report`)
+
 ### Bring-your-own-data for `ghost-alpha plan`
 - **New:** `ghost-alpha init-data <DIR>` writes editable templates (positions, vesting, symbol map, plan.toml)
 - **New:** `plan --data-dir` / `GHOST_ALPHA_DATA_DIR` discovers `positions/*.csv`, `vesting.csv`, `symbol_map.toml`, `plan.toml`
