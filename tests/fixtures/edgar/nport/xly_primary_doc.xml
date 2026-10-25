@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/nport" xmlns:com="http://www.sec.gov/edgar/common" xmlns:ncom="http://www.sec.gov/edgar/nportcommon" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sec.gov/edgar/nport eis_NPORT_Filer.xsd">
+  <headerData>
+    <submissionType>NPORT-P</submissionType>
+    <isConfidential>false</isConfidential>
+    <filerInfo>
+
+      <filer>
+        <issuerCredentials>
+          <cik>0001064641</cik>
+          <ccc>XXXXXXXX</ccc>
+        </issuerCredentials>
+      </filer>
+
+
+      <seriesClassInfo>
+        <seriesId>S000006408</seriesId>
+        <classId>C000017594</classId>
+      </seriesClassInfo>
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <genInfo>
+      <regName>SELECT SECTOR SPDR TRUST</regName>
+      <regFileNumber>811-08837</regFileNumber>
+      <regCik>0001064641</regCik>
+      <regLei>5493008JJKIPMEX3CO91</regLei>
+      <regStreet1>One Congress Street</regStreet1>
+      <regCity>Boston</regCity>
+      <regStateConditional regCountry="US" regState="US-MA"/>
+      <regZipOrPostalCode>02114</regZipOrPostalCode>
+      <regPhone>1-866-787-2257</regPhone>
+      <seriesName>State Street(R) Consumer Discretionary Select Sector SPDR(R) ETF</seriesName>
+      <seriesId>S000006408</seriesId>
+      <seriesLei>549300CD2I087Y919K79</seriesLei>
+      <repPdEnd>2026-09-30</repPdEnd>
+      <repPdDate>2026-06-30</repPdDate>
+      <isFinalFiling>N</isFinalFiling>
+    </genInfo>
+    <fundInfo>
+      <totAssets>22596644609.27</totAssets>
+      <totLiabs>3209144.72</totLiabs>
+      <netAssets>22593435464.55</netAssets>
+    </fundInfo>
+    <invstOrSecs>
+      <invstOrSec>
+        <name>Airbnb Inc</name>
+        <lei>549300HMUDNO0RY56D37</lei>
+        <title>Airbnb Inc</title>
+        <cusip>009066101</cusip>
+        <identifiers>
+          <isin value="US0090661010"/>
+        </identifiers>
+        <balance>2349480.00000000</balance>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>336210588.00000000</valUSD>
+        <pctVal>1.488089708745</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+        <issuerCat>CORP</issuerCat>
+        <invCountry>US</invCountry>
+        <isRestrictedSec>N</isRestrictedSec>
+
+        <fairValLevel>1</fairValLevel>
+        <securityLending>
+          <isCashCollateral>N</isCashCollateral>
+          <isNonCashCollateral>N</isNonCashCollateral>
+          <isLoanByFund>N</isLoanByFund>
+        </securityLending>
+      </invstOrSec>
+      <invstOrSec>
+        <name>Amazon.com Inc</name>
+        <lei>ZXTILKJKG63JELOEG630</lei>
+        <title>Amazon.com Inc</title>
+        <cusip>023135106</cusip>
+        <identifiers>
+          <isin value="US0231351067"/>
+        </identifiers>
+        <balance>21064870.00000000</balance>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>5020601115.80000000</valUSD>
+        <pctVal>22.22150378005</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+        <issuerCat>CORP</issuerCat>
+        <invCountry>US</invCountry>
+        <isRestrictedSec>N</isRestrictedSec>
+
+        <fairValLevel>1</fairValLevel>
+        <securityLending>
+          <isCashCollateral>N</isCashCollateral>
+          <isNonCashCollateral>N</isNonCashCollateral>
+          <isLoanByFund>N</isLoanByFund>
+        </securityLending>
+      </invstOrSec>
+      <invstOrSec>
+        <name>AutoZone Inc</name>
+        <lei>GA3JGKJ41LJKXDN23E90</lei>
+        <title>AutoZone Inc</title>
+        <cusip>053332102</cusip>
+        <identifiers>
+          <isin value="US0533321024"/>
+        </identifiers>
+        <balance>92626.00000000</balance>
+        <units>NS</units>
+        <curCd>USD</curCd>
+        <valUSD>296027138.44000000</valUSD>
+        <pctVal>1.310235173860</pctVal>
+        <payoffProfile>Long</payoffProfile>
+        <assetCat>EC</assetCat>
+        <issuerCat>CORP</issuerCat>
+        <invCountry>US</invCountry>
+        <isRestrictedSec>N</isRestrictedSec>
+
+        <fairValLevel>1</fairValLevel>
+        <securityLending>
+          <isCashCollateral>N</isCashCollateral>
+          <isNonCashCollateral>N</isNonCashCollateral>
+          <isLoanByFund>N</isLoanByFund>
+        </securityLending>
+      </invstOrSec>
+    </invstOrSecs>
+  </formData>
+  <documents>XXXX</documents>
+</edgarSubmission>
