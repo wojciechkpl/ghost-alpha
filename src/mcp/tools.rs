@@ -350,6 +350,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let output = masked_config(&config);
         assert_eq!(output.finnhub_api_key, "sk...89");
@@ -375,6 +376,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let output = masked_config(&config);
         assert_eq!(output.finnhub_api_key, "****");

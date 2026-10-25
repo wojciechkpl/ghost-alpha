@@ -544,6 +544,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         }
     }
 

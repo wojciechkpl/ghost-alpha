@@ -735,8 +735,11 @@ cargo build --release
 # Try the demo instantly — no API key needed
 ./target/release/ghost-alpha demo
 
-# Interactive setup wizard (configures API keys, alerts, database)
+# Guided setup wizard (API keys, EDGAR User-Agent, tax profile, alerts, database,
+# optional portfolio import). Safe to re-run: it pre-fills from your existing
+# config.toml / .env, shows a diff, and backs up what it changes.
 ./target/release/ghost-alpha setup
+./target/release/ghost-alpha setup --section profile   # re-run a single step
 
 # Or manual setup:
 echo 'GHOST_ALPHA_FINNHUB_API_KEY=your-key' > .env
@@ -851,7 +854,7 @@ src/
 ├── config.rs                  AppConfig — TOML + .env + env var layering
 ├── error.rs                   Typed errors: Data, Analysis, Alert, Storage, Config
 ├── output.rs                  Multi-format output: Table, JSON, CSV, JSONL, HTML
-├── wizard.rs                  Interactive setup wizard (dialoguer)
+├── wizard/                    Guided setup wizard (Prompter trait, dialoguer adapter, toml_edit writes)
 │
 ├── data/
 │   ├── models.rs              Candle, Stock, FlaggedStock, RegimeState, Severity

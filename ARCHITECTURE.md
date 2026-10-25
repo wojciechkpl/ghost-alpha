@@ -12,7 +12,7 @@ graph TB
         MAIN[main.rs<br/>19 subcommands]
         WEB[web/<br/>axum + htmx dashboard]
         OUTPUT[output.rs<br/>Table/JSON/CSV/HTML]
-        WIZARD[wizard.rs<br/>Setup wizard]
+        WIZARD[wizard/<br/>Setup wizard]
     end
 
     subgraph "Analysis Engine"
@@ -94,7 +94,7 @@ src/
 ├── config.rs                   # TOML config parsing
 ├── error.rs                    # Per-module error types (thiserror)
 ├── output.rs                   # Renderable trait, Table/JSON/CSV/HTML output
-├── wizard.rs                   # Interactive setup wizard
+├── wizard/                     # Guided setup wizard
 │
 ├── analysis/                   # Screening + scoring engine
 │   ├── mod.rs

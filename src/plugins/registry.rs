@@ -507,6 +507,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert!(reg.provider().is_ok());
@@ -537,6 +538,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert_eq!(reg.channel_names().len(), 1);
@@ -569,6 +571,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert!(reg.channel("webhook-0").is_some());
@@ -595,6 +598,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert!(reg.channel("discord").is_some());
@@ -619,6 +623,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert!(reg.scorer().is_ok());
@@ -651,6 +656,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         };
         let reg = default_registry(&config);
         assert!(reg.scorer_names().contains(&"null"));
@@ -674,6 +680,7 @@ mod tests {
             cache: Default::default(),
             universe: vec![],
             edgar: None,
+            profile: None,
         }
     }
 

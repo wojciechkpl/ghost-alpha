@@ -189,6 +189,7 @@ mod tests {
             cache: Default::default(),
             universe: Vec::new(),
             edgar: None,
+            profile: None,
         };
         AppState {
             repo: Arc::new(repo),

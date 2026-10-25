@@ -29,6 +29,7 @@ use crate::error::ConfigError;
 pub const ENV_FINNHUB_API_KEY: &str = "GHOST_ALPHA_FINNHUB_API_KEY";
 pub const ENV_TELEGRAM_BOT_TOKEN: &str = "GHOST_ALPHA_TELEGRAM_BOT_TOKEN";
 pub const ENV_TELEGRAM_CHAT_ID: &str = "GHOST_ALPHA_TELEGRAM_CHAT_ID";
+pub const ENV_FRED_API_KEY: &str = "GHOST_ALPHA_FRED_API_KEY";
 pub const ENV_DB_PATH: &str = "GHOST_ALPHA_DB_PATH";
 pub const ENV_LOG_LEVEL: &str = "GHOST_ALPHA_LOG_LEVEL";
 
@@ -39,6 +40,13 @@ pub const ENV_DISCORD_WEBHOOK_URL: &str = "GHOST_ALPHA_DISCORD_WEBHOOK_URL";
 
 // ── MCP server ──────────────────────────────────────────────────────────────
 pub const ENV_MCP_ENABLED: &str = "GHOST_ALPHA_MCP_ENABLED";
+
+/// Non-blank `GHOST_ALPHA_FRED_API_KEY`, if set.
+fn fred_api_key_from_env() -> Option<String> {
+    env::var(ENV_FRED_API_KEY)
+        .ok()
+        .filter(|k| !k.trim().is_empty())
+}
 
 /// Load `.env` file if present (silently ignored if absent).
 /// Call this once at startup before any `from_file` / `from_env` calls.
@@ -211,6 +219,20 @@ pub struct EdgarSettings {
     /// `"<app or name> <contact email>"`, e.g. `"Jane Doe jane@example.com"`.
     #[serde(default)]
     pub user_agent: Option<String>,
+}
+
+/// `[profile]` section of config.toml: personal tax defaults (see `ghost-alpha setup --section profile`).
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct ProfileConfig {
+    /// Two-letter state code, e.g. `"CA"`.
+    #[serde(default)]
+    pub state: Option<String>,
+    /// `"single"` or `"mfj"`.
+    #[serde(default)]
+    pub filing: Option<String>,
+    /// Other annual income in dollars.
+    #[serde(default)]
+    pub other_income: Option<f64>,
 }
 
 // ─── Webhook config (generic BYOA alert channel) ────────────────────────────
@@ -400,6 +422,10 @@ pub struct AppConfig {
     /// Optional SEC EDGAR settings (`[edgar]`); only used by `ghost-alpha edgar`.
     #[serde(default)]
     pub edgar: Option<EdgarSettings>,
+    /// Optional personal tax profile (`[profile]`); supplies defaults for
+    /// `--state`, `--filing` and `--other-income`.
+    #[serde(default)]
+    pub profile: Option<ProfileConfig>,
 }
 
 impl AppConfig {
@@ -490,7 +516,7 @@ impl AppConfig {
             },
             telegram,
             discord,
-            fred: None,
+            fred: fred_api_key_from_env().map(|api_key| FredConfig { api_key }),
             sentiment: None,
             backtest: None,
             alerts: AlertsConfig::default(),
@@ -503,6 +529,7 @@ impl AppConfig {
             cache: CacheConfig::default(),
             universe: Vec::new(),
             edgar: None,
+            profile: None,
         };
         config.validate()?;
         Ok(config)
@@ -538,6 +565,11 @@ impl AppConfig {
                     tg.chat_id = chat_id;
                 }
             }
+        }
+
+        // FRED macro-data key (`[fred]` is optional, so the env var alone enables it)
+        if let Some(api_key) = fred_api_key_from_env() {
+            self.fred = Some(FredConfig { api_key });
         }
 
         // Discord webhook
@@ -751,6 +783,17 @@ info_score_threshold     = 50.0
         cfg.resolve_env_overrides();
         assert_eq!(cfg.finnhub.api_key, original_key);
         std::env::remove_var(super::ENV_FINNHUB_API_KEY);
+    }
+
+    #[test]
+    fn env_override_fred_api_key_enables_fred() {
+        let mut cfg: AppConfig = toml::from_str(minimal_toml()).unwrap();
+        assert!(cfg.fred.is_none());
+
+        std::env::set_var(super::ENV_FRED_API_KEY, "fred-EXAMPLE");
+        cfg.resolve_env_overrides();
+        std::env::remove_var(super::ENV_FRED_API_KEY);
+        assert_eq!(cfg.fred.unwrap().api_key, "fred-EXAMPLE");
     }
 
     #[test]

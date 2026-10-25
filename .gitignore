@@ -66,3 +66,7 @@ plan_output/
 **/positions/*.csv
 !tests/fixtures/vesting/sample.csv
 reports/
+
+# Setup wizard: default data folder (positions, vesting) and config backups
+/data/
+*.bak
