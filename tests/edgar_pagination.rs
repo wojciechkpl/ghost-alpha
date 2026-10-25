@@ -15,6 +15,9 @@
 //!       results are merged, filtered, and kept in SEC order (newest first);
 //!     * page bodies are cached like other resources.
 //!   EdgarClient::submissions(id) returns `recent` only (never fetches pages).
+//!   Follow-ups: N4 one submissions request per `filings` call even with cache_ttl_hours = 0;
+//!   N5 only page names matching ^CIK\d{10}-submissions-\d{3}\.json$ are requested (others skipped, Ok);
+//!   N6 a failing older page (404/5xx) is skipped: `filings` returns the other results (Ok).
 
 use chrono::NaiveDate;
 use ghost_alpha::data::edgar::*;
@@ -294,7 +297,8 @@ async fn test_filings_when_pages_requested_twice_should_cache_page_bodies() {
 }
 
 #[tokio::test]
-async fn test_filings_when_a_needed_page_is_missing_should_propagate_not_found() {
+async fn test_filings_when_a_needed_page_is_missing_should_skip_it_and_return_other_results() {
+    // (was: propagate NotFound) -- N6: one failing older page must not discard the rest.
     let e = Env::new().await;
     e.data.reset().await;
     Mock::given(method("GET"))
@@ -302,9 +306,304 @@ async fn test_filings_when_a_needed_page_is_missing_should_propagate_not_found()
         .respond_with(ok(fx("submissions_paged.json")))
         .mount(&e.data)
         .await;
-    let r = e
+    let v = e
         .client()
         .filings("999999", None, None, Some(d("2021-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(v.len(), 3, "recent filings only; page 001 was a 404");
+    assert_eq!(hits(&e.data, P1).await, 1);
+}
+
+#[tokio::test]
+async fn test_filings_when_one_page_fails_with_5xx_and_other_succeeds_should_merge_the_good_page() {
+    let e = Env::new().await;
+    e.data.reset().await;
+    Mock::given(method("GET"))
+        .and(path(MAIN))
+        .respond_with(ok(fx("submissions_paged.json")))
+        .mount(&e.data)
         .await;
-    assert!(matches!(r, Err(EdgarError::NotFound { .. })), "{r:?}");
+    Mock::given(method("GET"))
+        .and(path(P1))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P2))
+        .respond_with(ok(fx("submissions_page_002.json")))
+        .mount(&e.data)
+        .await;
+    let v = e
+        .client()
+        .filings("999999", Some("8-K"), Some("2.02"), Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(
+        accns(&v),
+        vec![
+            "0000999999-24-000011",
+            "0000999999-23-000041",
+            "0000999999-18-000041",
+            "0000999999-12-000001"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn test_filings_when_main_submissions_document_fails_should_still_error() {
+    let e = Env::new().await;
+    e.data.reset().await;
+    Mock::given(method("GET"))
+        .and(path(MAIN))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&e.data)
+        .await;
+    let r = e
+        .client()
+        .filings("999999", None, None, Some(d("2000-01-01")))
+        .await;
+    assert!(
+        matches!(r, Err(EdgarError::HttpStatus { status: 500, .. })),
+        "{r:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_filings_when_cache_ttl_is_zero_should_request_each_document_once_per_call() {
+    let e = Env::new().await;
+    let mut c = EdgarConfig::new(UA, e.cache.path().join("ttl0"));
+    c.requests_per_second = 1000;
+    c.retry_base_delay_ms = 1;
+    c.max_retries = 0;
+    c.cache_ttl_hours = 0;
+    let client = EdgarClient::new(c)
+        .unwrap()
+        .with_base_urls(e.data.uri(), e.www.uri());
+
+    client.filings("999999", None, None, None).await.unwrap();
+    assert_eq!(hits(&e.data, MAIN).await, 1, "since = None");
+
+    client
+        .filings("999999", None, None, Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(hits(&e.data, MAIN).await, 2, "one more fetch, not two");
+    assert_eq!(hits(&e.data, P1).await, 1);
+    assert_eq!(hits(&e.data, P2).await, 1);
+}
+
+// ── N5: page-name validation ─────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_filings_when_page_names_are_hostile_should_skip_them_without_request_or_write() {
+    let e = Env::new().await;
+    let outside = TempDir::new().unwrap();
+    let abs = format!("{}/abs_evil.json", outside.path().display());
+    let mut v: serde_json::Value = serde_json::from_str(&fx("submissions_paged.json")).unwrap();
+    let files = v["filings"]["files"].as_array_mut().unwrap();
+    files.retain(|f| f["name"] == "CIK0000999999-submissions-001.json");
+    for n in [
+        "../../evil.json",
+        "../evil2.json",
+        "../../../evil3.json",
+        "CIK999999-submissions-001.json",
+        "CIK0000999999-submissions-1.json",
+        "CIK0000999999-submissions-002.json?x=1",
+        "sub/CIK0000999999-submissions-002.json",
+        "CIK0000999999-submissions-001.json/../../evil4.json",
+        // F1: non-ASCII input must be skipped, never panic in the validator
+        "CIK0000999999-submissions\u{e9}01.json", // 34 bytes, multibyte char at the slice boundary
+        "CIK000099999\u{e9}-submissions-001.json",
+        "CIK0000999999-submissions-00\u{e9}.json",
+        "CIK\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}\u{ff10}-submissions-001.json", // fullwidth digits
+        "CIK0000999999-submissions-001.json\u{200b}",
+        "\u{1F600}.json",
+        "",
+        abs.as_str(),
+    ] {
+        files.push(serde_json::json!({"name": n, "filingCount": 1,
+            "filingFrom": "2001-01-01", "filingTo": "2020-01-01"}));
+    }
+    e.data.reset().await;
+    Mock::given(method("GET"))
+        .and(path(MAIN))
+        .respond_with(ok(v.to_string()))
+        .with_priority(1)
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P1))
+        .respond_with(ok(fx("submissions_page_001.json")))
+        .with_priority(1)
+        .mount(&e.data)
+        .await;
+    // bait: a valid-looking page for any other path
+    Mock::given(method("GET"))
+        .respond_with(ok(fx("submissions_page_002.json")))
+        .with_priority(9)
+        .mount(&e.data)
+        .await;
+
+    let got = e
+        .client()
+        .filings("999999", None, None, Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(got.len(), 3 + 3, "recent + page 001 only");
+
+    let paths: Vec<String> = e
+        .data
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.url.path().to_string())
+        .collect();
+    for p in &paths {
+        assert!(
+            p == MAIN || p == P1,
+            "unexpected request {p:?} in {paths:?}"
+        );
+    }
+
+    let cache_root = e.cache.path().join("c");
+    for name in ["evil.json", "evil2.json", "evil3.json", "evil4.json"] {
+        assert!(
+            !e.cache.path().join(name).exists(),
+            "{name} escaped the cache"
+        );
+        assert!(
+            !cache_root.join(name).exists(),
+            "{name} written at cache root"
+        );
+    }
+    assert!(
+        !std::path::Path::new(&abs).exists(),
+        "absolute page name written"
+    );
+    fn all_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let p = entry.unwrap().path();
+            if p.is_dir() {
+                all_files(&p, out);
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    all_files(e.cache.path(), &mut files);
+    for f in files {
+        assert!(
+            f.starts_with(&cache_root),
+            "{} is outside the cache dir",
+            f.display()
+        );
+    }
+}
+
+// ── F3: a 403 on an older page ends the page loop ────────────────────────────
+
+const P3: &str = "/submissions/CIK0000999999-submissions-003.json";
+
+async fn three_page_env() -> Env {
+    let e = Env::new().await;
+    let mut v: serde_json::Value = serde_json::from_str(&fx("submissions_paged.json")).unwrap();
+    v["filings"]["files"].as_array_mut().unwrap().push(
+        serde_json::json!({"name": "CIK0000999999-submissions-003.json", "filingCount": 1,
+            "filingFrom": "2009-05-01", "filingTo": "2009-05-01"}),
+    );
+    e.data.reset().await;
+    Mock::given(method("GET"))
+        .and(path(MAIN))
+        .respond_with(ok(v.to_string()))
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P3))
+        .respond_with(ok(fx("submissions_page_003.json")))
+        .mount(&e.data)
+        .await;
+    e
+}
+
+#[tokio::test]
+async fn test_filings_when_middle_page_is_403_should_keep_earlier_pages_and_not_request_later_ones()
+{
+    let e = three_page_env().await;
+    Mock::given(method("GET"))
+        .and(path(P1))
+        .respond_with(ok(fx("submissions_page_001.json")))
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P2))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&e.data)
+        .await;
+    let v = e
+        .client()
+        .filings("999999", Some("8-K"), Some("2.02"), Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(
+        accns(&v),
+        vec![
+            "0000999999-24-000011",
+            "0000999999-23-000041",
+            "0000999999-21-000040",
+            "0000999999-19-000020"
+        ]
+    );
+    assert_eq!(hits(&e.data, P1).await, 1);
+    assert_eq!(hits(&e.data, P2).await, 1);
+    assert_eq!(hits(&e.data, P3).await, 0);
+}
+
+#[tokio::test]
+async fn test_filings_when_first_page_is_403_should_return_recent_only_and_request_no_more_pages() {
+    let e = three_page_env().await;
+    Mock::given(method("GET"))
+        .and(path(P1))
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P2))
+        .respond_with(ok(fx("submissions_page_002.json")))
+        .mount(&e.data)
+        .await;
+    let v = e
+        .client()
+        .filings("999999", None, None, Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(v.len(), 3, "recent only");
+    assert_eq!(hits(&e.data, P1).await, 1);
+    assert_eq!(hits(&e.data, P2).await + hits(&e.data, P3).await, 0);
+}
+
+#[tokio::test]
+async fn test_filings_when_page_is_404_should_still_continue_with_later_pages() {
+    // only 403 (rate-limit block) aborts the loop; a missing page does not
+    let e = three_page_env().await;
+    Mock::given(method("GET"))
+        .and(path(P1))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&e.data)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(P2))
+        .respond_with(ok(fx("submissions_page_002.json")))
+        .mount(&e.data)
+        .await;
+    let v = e
+        .client()
+        .filings("999999", None, None, Some(d("2000-01-01")))
+        .await
+        .unwrap();
+    assert_eq!(v.len(), 3 + 2 + 1);
+    assert_eq!(hits(&e.data, P2).await, 1);
+    assert_eq!(hits(&e.data, P3).await, 1);
 }
