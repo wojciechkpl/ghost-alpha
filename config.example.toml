@@ -73,6 +73,15 @@ sector_concentration_threshold = 3
 # SQLite database path (or set GHOST_ALPHA_DB_PATH env var)
 db_path = "ghost_alpha.db"
 
+# ── Tax profile ──────────────────────────────────────────────────────────────
+# Defaults for --state, --filing and --other-income on sell-plan / sell-compare.
+# Command-line flags win. Set it with: ghost-alpha setup --section profile
+
+# [profile]
+# state = "CA"
+# filing = "single"          # single | mfj
+# other_income = 150000.0
+
 # ── Plugins / BYOA (Bring Your Own Agent) ────────────────────────────────────
 # Configure which registered implementations to use, and add custom webhook
 # alert channels for any agent or service to receive alerts.

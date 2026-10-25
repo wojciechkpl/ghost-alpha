@@ -4,6 +4,13 @@ All notable changes to GhostAlpha are documented in this file.
 
 ## [Unreleased] — v2.0
 
+### Guided setup wizard
+- **New:** `ghost-alpha setup` reads the existing `config.toml` and `.env`, pre-fills every prompt from them, and edits both in place: comments, ordering and unknown keys survive, and unrelated `.env` lines are kept. Secrets are asked with masked input and only ever go to `.env` (mode 0600)
+- **New:** nothing is written before a review that shows each file as new, changed (with a diff in which every `.env` value is masked) or unchanged; changed files are backed up to `*.bak` and written atomically. `--yes` skips only that final confirmation
+- **New:** `setup --section <data|edgar|profile|alerts|storage|portfolio>` re-runs one step. Steps now cover the EDGAR User-Agent, a `[profile]` tax profile (state, filing, other income), the FRED key (`GHOST_ALPHA_FRED_API_KEY`, now read by the config loader), and an optional portfolio import that validates your positions and vesting CSVs with the same loaders as `plan`, copies them into a data folder and writes `plan.toml`
+- **Changed:** `sell-plan` and `sell-compare` no longer require `--state`: `--state`, `--filing` and `--other-income` fall back to `[profile]` in the config file (a stderr note names what came from it), and `--state` is an explicit error naming `setup --section profile` when neither is set
+- **Changed:** `.gitignore` ignores `data/` and `*.bak`; the wizard warns when the chosen data folder is inside a git work tree and not ignored
+
 ### Web dashboard: shared shell, accessibility and hardening
 - **Changed:** every page renders through one shell (`web::shell`) with a single navigation grouped into Portfolio, Markets, Research, Tools and System; `/concentration-decay` is now reachable from the nav; the menu collapses on small screens
 - **New:** `tokens.css` light/dark colour tokens (also driving Pico), with WCAG contrast checked in tests; status badges pair colour with an icon

@@ -1,16 +1,36 @@
-//! Interactive setup wizard for Ghost Alpha.
+//! Guided setup wizard for Ghost Alpha.
 //!
-//! The wizard walks the user through configuring all required and optional
-//! settings in a single interactive session, then writes:
+//! `ghost-alpha setup` reads the existing `config.toml` and dotenv file, asks
+//! only for what the user wants to change (every prompt is pre-filled from the
+//! files), shows what would change and writes it after confirmation:
 //!
-//! - `config.toml` — non-sensitive settings (api_key references env var)
-//! - `.env`        — secrets (API keys, tokens, webhook URLs)
+//! - `config.toml` — non-sensitive settings, edited in place so comments, order
+//!   and unknown keys survive
+//! - `.env`        — secrets (API keys, tokens, webhook URLs), mode 0600
+//! - `<data>/`     — optionally, the user's positions / vesting CSVs and `plan.toml`
 //!
-//! Pure generation functions (`build_config_toml`, `build_dot_env`) take plain
-//! parameters and return `String` so they can be unit-tested without a TTY.
+//! All terminal I/O sits behind [`Prompter`], so the steps ([`run_steps`]), the
+//! write planning ([`plan_writes`]) and [`apply`] are tested with
+//! [`ScriptedPrompter`] and no TTY. [`DialoguerPrompter`] is the thin real-terminal
+//! adapter. `build_config_toml` / `build_dot_env` are the pure fresh-install
+//! generators and need no TTY either.
+
+mod answers;
+mod existing;
+mod portfolio;
+mod prompter;
+mod steps;
+mod writes;
+
+pub use answers::{Section, SetupAnswers};
+pub use existing::ExistingSetup;
+pub use portfolio::{summarize_positions, ImportSummary};
+pub use prompter::{Asked, DialoguerPrompter, Prompter, ScriptedPrompter};
+pub use steps::run_steps;
+pub use writes::{apply, plan_writes, ChangeKind, FileChange};
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
@@ -110,149 +130,140 @@ pub fn write_file(path: &str, content: &str) -> Result<()> {
     Ok(())
 }
 
-// ─── Interactive wizard (requires a TTY — not unit-tested) ───────────────────
+// ─── Orchestration ───────────────────────────────────────────────────────────
 
-/// Run the full interactive setup wizard.
+/// Diffs longer than this many lines are summarised in the review.
+const MAX_REVIEW_DIFF_LINES: usize = 80;
+
+/// Options for [`run_setup`].
+#[derive(Debug, Clone)]
+pub struct SetupOptions {
+    pub config_path: PathBuf,
+    /// The dotenv file holding secrets.
+    pub env_path: PathBuf,
+    pub section: Option<Section>,
+    /// Skip only the final confirmation.
+    pub yes: bool,
+}
+
+/// Show each planned file as new / changed (with its masked diff) / unchanged.
+fn show_review(prompter: &mut dyn Prompter, changes: &[FileChange]) {
+    for c in changes {
+        let label = match c.kind {
+            ChangeKind::New => "new      ",
+            ChangeKind::Changed => "changed  ",
+            ChangeKind::Unchanged => "unchanged",
+            ChangeKind::Removed => "to .bak  ",
+        };
+        prompter.note(&format!("  {label} {}", c.path.display()));
+        let diff = c.masked_diff();
+        let lines = diff.lines().count();
+        if lines > MAX_REVIEW_DIFF_LINES {
+            prompter.note(&format!("    ({lines} diff lines not shown)"));
+        } else if !diff.is_empty() {
+            prompter.note(diff.trim_end());
+        }
+    }
+}
+
+/// Follow-up commands tailored to what was just configured.
+fn next_steps(answers: &SetupAnswers, opts: &SetupOptions) -> Vec<String> {
+    let mut steps = Vec::new();
+    if answers.touches_config() {
+        steps.push("ghost-alpha migrate          # apply database migrations".to_string());
+        steps.push("ghost-alpha screen --top 10  # first screening run".to_string());
+    }
+    if answers.has_profile() {
+        steps.push(
+            "ghost-alpha sell-compare --ticker XYZ --shares 1000 --cost-basis 50 --price 100"
+                .to_string(),
+        );
+    }
+    if answers.has_edgar() {
+        steps.push("ghost-alpha edgar --help     # SEC filings and XBRL facts".to_string());
+    }
+    if let Some(dir) = answers.portfolio_dir() {
+        steps.push(format!("ghost-alpha plan --data-dir {}", dir.display()));
+    }
+    let secrets_dir = opts.env_path.parent().filter(|p| !p.as_os_str().is_empty());
+    if let Some(dir) = secrets_dir {
+        steps.push(format!(
+            "note: the secrets file sits next to the config; ghost-alpha reads it from the \
+             current directory, so run from {}",
+            dir.display()
+        ));
+    }
+    steps
+}
+
+/// load -> steps -> plan -> review (`review.confirm` unless `yes`) -> apply
+/// (with backup). Returns the paths written (empty if declined / nothing changed).
+pub fn run_setup(prompter: &mut dyn Prompter, opts: &SetupOptions) -> Result<Vec<PathBuf>> {
+    let existing = ExistingSetup::load(&opts.config_path, &opts.env_path);
+    // An existing file we cannot read must never be treated as empty and replaced.
+    if let Some((path, why)) = existing.unreadable().first() {
+        anyhow::bail!(
+            "cannot read {}: {why}. Nothing was changed; fix the file or its permissions and re-run setup.",
+            path.display()
+        );
+    }
+    for warning in existing.warnings() {
+        prompter.note(&format!("warning: {warning}"));
+    }
+    let answers = run_steps(prompter, &existing, opts.section)?;
+    let changes = plan_writes(&existing, &answers);
+
+    prompter.note("\nReview");
+    show_review(prompter, &changes);
+    if changes.iter().all(|c| c.kind == ChangeKind::Unchanged) {
+        prompter.note("\nNothing to change.");
+        return Ok(Vec::new());
+    }
+    if !opts.yes && !prompter.confirm("review.confirm", "Write these files?", true)? {
+        prompter.note("Nothing written.");
+        return Ok(Vec::new());
+    }
+
+    let written = apply(&changes, true)?;
+    prompter.note("\nWritten:");
+    for path in &written {
+        prompter.note(&format!("  {}", path.display()));
+    }
+    let steps = next_steps(&answers, opts);
+    if !steps.is_empty() {
+        prompter.note("\nNext steps:");
+        for step in steps {
+            prompter.note(&format!("  {step}"));
+        }
+    }
+    Ok(written)
+}
+
+/// Run the guided setup wizard on the real terminal.
 ///
-/// This function drives the terminal prompts via `dialoguer`.  It is **not**
-/// unit-tested because it requires an interactive TTY.  The pure generation
-/// helpers (`build_config_toml`, `build_dot_env`, `write_file`) are tested
-/// separately.
-pub async fn run_setup_wizard() -> Result<()> {
-    use dialoguer::{theme::ColorfulTheme, Confirm, Input};
-
-    let theme = ColorfulTheme::default();
-
+/// The secrets file is written next to `config_path`. Not unit-tested (it needs
+/// a TTY); everything it does is covered through [`run_setup`] with a
+/// [`ScriptedPrompter`].
+pub async fn run_setup_wizard(
+    config_path: &Path,
+    section: Option<Section>,
+    yes: bool,
+) -> Result<()> {
+    use std::io::IsTerminal;
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        anyhow::bail!("setup is interactive and needs a terminal (stdin and stdout must be a TTY)");
+    }
     println!();
-    println!("  Ghost Alpha Setup Wizard");
-    println!("  \u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}");
-    println!();
-
-    // ── Step 1: Finnhub API key ──────────────────────────────────────────────
-    println!("  Step 1/5: Data Provider");
-    println!("  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}");
-
-    let api_key: String = Input::with_theme(&theme)
-        .with_prompt("Finnhub API key (free at https://finnhub.io)")
-        .validate_with(|input: &String| {
-            if input.trim().is_empty() {
-                Err("API key cannot be empty")
-            } else {
-                Ok(())
-            }
-        })
-        .interact_text()?;
-
-    println!();
-
-    // ── Step 2: Telegram (optional) ─────────────────────────────────────────
-    println!("  Step 2/5: Alert Channels — Telegram (optional, press Enter to skip)");
-    println!("  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}");
-
-    let telegram_token: String = Input::with_theme(&theme)
-        .with_prompt("Telegram bot token (from @BotFather, Enter to skip)")
-        .allow_empty(true)
-        .interact_text()?;
-
-    let (telegram_bot_token, telegram_chat_id) = if telegram_token.trim().is_empty() {
-        println!("  (skipped)");
-        (None, None)
-    } else {
-        let chat_id: String = Input::with_theme(&theme)
-            .with_prompt("Telegram chat ID")
-            .validate_with(|input: &String| {
-                if input.trim().is_empty() {
-                    Err("Chat ID cannot be empty when bot token is set")
-                } else {
-                    Ok(())
-                }
-            })
-            .interact_text()?;
-        (Some(telegram_token), Some(chat_id))
+    println!("  Ghost Alpha Setup");
+    println!("  Press Enter to keep the current value. Nothing is written until you confirm.");
+    let opts = SetupOptions {
+        config_path: config_path.to_path_buf(),
+        env_path: config_path.with_file_name(".env"),
+        section,
+        yes,
     };
-
+    run_setup(&mut DialoguerPrompter::new(), &opts)?;
     println!();
-
-    // ── Step 3: Discord (optional) ──────────────────────────────────────────
-    println!("  Step 3/5: Alert Channels — Discord (optional, press Enter to skip)");
-    println!("  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}");
-
-    let discord_raw: String = Input::with_theme(&theme)
-        .with_prompt("Discord webhook URL (Enter to skip)")
-        .allow_empty(true)
-        .interact_text()?;
-
-    let discord_webhook_url = if discord_raw.trim().is_empty() {
-        println!("  (skipped)");
-        None
-    } else {
-        Some(discord_raw)
-    };
-
-    println!();
-
-    // ── Step 4: Database path ────────────────────────────────────────────────
-    println!("  Step 4/5: Database");
-    println!("  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}");
-
-    let db_path: String = Input::with_theme(&theme)
-        .with_prompt("Database path")
-        .default("ghost_alpha.db".to_string())
-        .interact_text()?;
-
-    println!();
-
-    // ── Step 5: Sentiment model (optional) ──────────────────────────────────
-    println!("  Step 5/5: Sentiment Model (optional)");
-    println!("  \u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}");
-
-    let download_sentiment = Confirm::with_theme(&theme)
-        .with_prompt("Download FinBERT ONNX model (~400MB)?")
-        .default(false)
-        .interact()?;
-
-    let model_path = if download_sentiment {
-        let mp = "models/finbert".to_string();
-        println!("  Model directory will be: {}", mp);
-        println!("  Download the FinBERT ONNX model from https://huggingface.co/ProsusAI/finbert");
-        println!("  Place model.onnx and tokenizer.json in {}", mp);
-        Some(mp)
-    } else {
-        println!("  (skipped — use --skip-sentiment when screening)");
-        None
-    };
-
-    println!();
-
-    // ── Write files ──────────────────────────────────────────────────────────
-    let wizard_cfg = WizardConfig {
-        has_telegram: telegram_bot_token.is_some(),
-        has_discord: discord_webhook_url.is_some(),
-        db_path: db_path.clone(),
-        model_path: model_path.clone(),
-    };
-
-    let config_toml_content = build_config_toml(&wizard_cfg);
-    let dot_env_content = build_dot_env(
-        &api_key,
-        telegram_bot_token.as_deref(),
-        telegram_chat_id.as_deref(),
-        discord_webhook_url.as_deref(),
-    );
-
-    write_file("config.toml", &config_toml_content)?;
-    write_file(".env", &dot_env_content)?;
-
-    println!("  Config saved to: ./config.toml");
-    println!("  Secrets saved to: ./.env");
-    println!();
-    println!("  Next steps:");
-    println!("    ghost-alpha migrate          # Apply database migrations");
-    println!("    ghost-alpha screen           # Full S&P 500 screening");
-    println!("    ghost-alpha screen --top 10  # Top 10 only");
-    println!("    ghost-alpha regime           # Current market regime");
-    println!();
-
     Ok(())
 }
 

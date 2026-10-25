@@ -198,11 +198,17 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
-    /// Interactive setup wizard — configures API keys, alerts, and database
+    /// Guided setup wizard — edits config.toml and the secrets file in place, with a preview
     Setup {
         /// Skip interactive prompts; only download/prepare model files
         #[arg(long)]
         models_only: bool,
+        /// Run only one step of the wizard
+        #[arg(long, value_enum, conflicts_with = "models_only")]
+        section: Option<ghost_alpha::wizard::Section>,
+        /// Skip the final "write these files?" confirmation (prompts are still asked)
+        #[arg(long, conflicts_with = "models_only")]
+        yes: bool,
     },
     /// Manage personal watchlist of tickers
     Watch {
@@ -241,15 +247,15 @@ enum Commands {
         /// Date shares were acquired (YYYY-MM-DD)
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
-        /// Filing status: single or mfj
-        #[arg(long, default_value = "single")]
-        filing: String,
-        /// State code (e.g., WA, CA, TX)
+        /// Filing status: single or mfj (default: [profile] filing, else single)
         #[arg(long)]
-        state: String,
-        /// Other annual income (salary, etc.)
-        #[arg(long, default_value = "0")]
-        other_income: f64,
+        filing: Option<String>,
+        /// State code, e.g. WA, CA, TX (default: [profile] state; set it with `ghost-alpha setup --section profile`)
+        #[arg(long)]
+        state: Option<String>,
+        /// Other annual income, salary etc. (default: [profile] other_income, else 0)
+        #[arg(long)]
+        other_income: Option<f64>,
         /// Assumed annual price growth (e.g., 0.05 for 5%)
         #[arg(long, default_value = "0.0")]
         growth: f64,
@@ -280,15 +286,15 @@ enum Commands {
         /// Date shares were acquired (YYYY-MM-DD)
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
-        /// Filing status: single or mfj
-        #[arg(long, default_value = "single")]
-        filing: String,
-        /// State code (e.g., WA, CA, TX)
+        /// Filing status: single or mfj (default: [profile] filing, else single)
         #[arg(long)]
-        state: String,
-        /// Other annual income (salary, etc.)
-        #[arg(long, default_value = "0")]
-        other_income: f64,
+        filing: Option<String>,
+        /// State code, e.g. WA, CA, TX (default: [profile] state; set it with `ghost-alpha setup --section profile`)
+        #[arg(long)]
+        state: Option<String>,
+        /// Other annual income, salary etc. (default: [profile] other_income, else 0)
+        #[arg(long)]
+        other_income: Option<f64>,
         /// Assumed annual price growth (e.g., 0.05 for 5%)
         #[arg(long, default_value = "0.0")]
         growth: f64,
@@ -331,15 +337,15 @@ enum Commands {
         /// Date shares were acquired (YYYY-MM-DD)
         #[arg(long, default_value = "2022-01-01")]
         acquired: String,
-        /// Filing status: single or mfj
-        #[arg(long, default_value = "single")]
-        filing: String,
-        /// State code
+        /// Filing status: single or mfj (default: [profile] filing, else single)
         #[arg(long)]
-        state: String,
-        /// Other annual income
-        #[arg(long, default_value = "200000")]
-        other_income: f64,
+        filing: Option<String>,
+        /// State code (default: [profile] state; set it with `ghost-alpha setup --section profile`)
+        #[arg(long)]
+        state: Option<String>,
+        /// Other annual income (default: [profile] other_income, else 200000)
+        #[arg(long)]
+        other_income: Option<f64>,
         /// Value of rest of portfolio (non-concentrated)
         #[arg(long, default_value = "50000")]
         other_value: f64,
@@ -1733,8 +1739,18 @@ async fn main() -> Result<()> {
     // Setup wizard runs before config exists (it creates the config).
     // --models-only falls through to the normal config-loading path so it can
     // read the model_path from an already-configured config.toml.
-    if let Commands::Setup { models_only: false } = cli.command {
-        return ghost_alpha::wizard::run_setup_wizard().await;
+    if let Commands::Setup {
+        models_only: false,
+        section,
+        yes,
+    } = cli.command
+    {
+        return ghost_alpha::wizard::run_setup_wizard(
+            std::path::Path::new(&cli.config),
+            section,
+            yes,
+        )
+        .await;
     }
 
     // Load config — MCP mode can fall back to env-only
@@ -1944,7 +1960,7 @@ async fn main() -> Result<()> {
             }
         }
         Commands::Plan { .. } => unreachable!("Plan is handled before config load"),
-        Commands::Setup { models_only } => {
+        Commands::Setup { models_only, .. } => {
             // models_only == false is already handled before config loading.
             // We only reach here when --models-only is set.
             debug_assert!(
@@ -2037,15 +2053,16 @@ async fn main() -> Result<()> {
             distribution,
             format,
         } => {
+            let tax = resolve_tax_profile(&cli.config, state, filing, other_income, 0.0)?;
             run_sell_plan(
                 &ticker,
                 shares,
                 cost_basis,
                 price,
                 &acquired,
-                &filing,
-                &state,
-                other_income,
+                &tax.filing,
+                &tax.state,
+                tax.other_income,
                 growth,
                 years,
                 &distribution,
@@ -2065,15 +2082,16 @@ async fn main() -> Result<()> {
             max_years,
             format,
         } => {
+            let tax = resolve_tax_profile(&cli.config, state, filing, other_income, 0.0)?;
             run_sell_compare(
                 &ticker,
                 shares,
                 cost_basis,
                 price,
                 &acquired,
-                &filing,
-                &state,
-                other_income,
+                &tax.filing,
+                &tax.state,
+                tax.other_income,
                 growth,
                 max_years,
                 format,
@@ -2102,15 +2120,16 @@ async fn main() -> Result<()> {
             profile,
             output,
         } => {
+            let tax = resolve_tax_profile(&cli.config, state, filing, other_income, 200_000.0)?;
             run_div_report(
                 &ticker,
                 shares,
                 cost_basis,
                 price,
                 &acquired,
-                &filing,
-                &state,
-                other_income,
+                &tax.filing,
+                &tax.state,
+                tax.other_income,
                 other_value,
                 years,
                 &brokerage,
@@ -2210,6 +2229,98 @@ fn edgar_config_user_agent(path: &str) -> Option<String> {
             None
         }
     }
+}
+
+/// Tax inputs after applying `[profile]` defaults.
+struct TaxProfile {
+    state: String,
+    filing: String,
+    other_income: f64,
+}
+
+/// `[profile]` from the config file, read without loading (or validating) the
+/// rest of the app config, the same way [`edgar_config_user_agent`] reads
+/// `[edgar]`. A missing file is fine; an unreadable or malformed one only
+/// produces a warning, since the command-line flags may be enough.
+fn config_profile(path: &str) -> Option<ghost_alpha::config::ProfileConfig> {
+    #[derive(serde::Deserialize)]
+    struct Partial {
+        profile: Option<ghost_alpha::config::ProfileConfig>,
+    }
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            eprintln!(
+                "warning: could not read config file '{path}': {e}; ignoring [profile] section"
+            );
+            return None;
+        }
+    };
+    match toml::from_str::<Partial>(&text) {
+        Ok(p) => p.profile,
+        Err(e) => {
+            eprintln!(
+                "warning: could not parse config file '{path}': {e}; ignoring [profile] section"
+            );
+            None
+        }
+    }
+}
+
+/// Resolve `--state`, `--filing` and `--other-income`: flag, then `[profile]`
+/// in the config file, then (`--filing` and `--other-income` only) the built-in
+/// default (`single`; `default_other_income`, which differs per command). `--state` has no default, since a silent guess would change the tax
+/// maths. The values taken from `[profile]` are named on stderr, so stdout stays
+/// identical to a run with explicit flags.
+fn resolve_tax_profile(
+    config_path: &str,
+    state: Option<String>,
+    filing: Option<String>,
+    other_income: Option<f64>,
+    default_other_income: f64,
+) -> Result<TaxProfile> {
+    let all_flags = state.is_some() && filing.is_some() && other_income.is_some();
+    let profile = if all_flags {
+        Default::default()
+    } else {
+        config_profile(config_path).unwrap_or_default()
+    };
+
+    let mut from_profile: Vec<String> = Vec::new();
+    let mut take = |flag: Option<String>, profile: Option<String>, name: &str| -> Option<String> {
+        flag.or_else(|| profile.inspect(|v| from_profile.push(format!("{name}={v}"))))
+    };
+    let state = take(state, profile.state, "state");
+    let filing = take(filing, profile.filing, "filing");
+    let other_income = match other_income {
+        Some(v) => v,
+        None => match profile.other_income {
+            Some(v) => {
+                from_profile.push(format!("other_income={v}"));
+                v
+            }
+            None => default_other_income,
+        },
+    };
+
+    let Some(state) = state else {
+        anyhow::bail!(
+            "--state is required: pass --state <CODE> (e.g. CA, TX, WA) or save it in \
+             {config_path} with `ghost-alpha setup --section profile`"
+        );
+    };
+    if !from_profile.is_empty() {
+        eprintln!(
+            "note: using [profile] from {config_path}: {}",
+            from_profile.join(", ")
+        );
+    }
+    Ok(TaxProfile {
+        state,
+        filing: filing.unwrap_or_else(|| "single".to_string()),
+        other_income,
+    })
 }
 
 /// `ghost-alpha plan`: runs without any app config or API key.
