@@ -824,6 +824,11 @@ Things to know:
 - Concept names vary: since ASC 606 many filers report revenue as
   `RevenueFromContractWithCustomerExcludingAssessedTax` rather than `Revenues`. When a concept or unit
   is not found, stderr lists similar concepts / available units.
+- `edgar facts` also explains on stderr (stdout is unchanged) when a series stops years before the
+  filer's latest 10-K/10-Q (likely a concept switch, with active alternatives listed), or when a concept
+  exists only on forms the series does not use (e.g. 20-F/40-F filers have no 10-K/10-Q series).
+- An older filings page that fails to download, or has an unexpected file name, is skipped with a
+  warning on stderr; the other results are still printed.
 - Annual series only include ~12-month periods and quarterly series only ~3-month periods, so
   year-to-date and Q4 slices do not pollute them.
 
