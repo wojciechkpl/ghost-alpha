@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <author>
+      <email>webmaster@sec.gov</email>
+      <name>Webmaster</name>
+    </author>
+    <company-info>
+      <cik>0001064641</cik>
+      <cik-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0001064641&amp;owner=include&amp;count=40</cik-href>
+      <conformed-name>SELECT SECTOR SPDR TRUST</conformed-name>
+      <fiscal-year-end>0930</fiscal-year-end>
+      <formerly-names count="1">
+        <names>
+          <date>2004-11-29</date>
+          <name>SECTOR SPDR TRUST</name>
+        </names>
+      </formerly-names>
+      <state-location>MA</state-location>
+      <state-location-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;State=MA&amp;owner=include&amp;count=40</state-location-href>
+    </company-info>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P/A" />
+      <content type="text/xml">
+        <accession-number>0001410368-26-100002</accession-number>
+        <filing-date>2026-09-20</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/1064641/000141036826100002/0001410368-26-100002-index.htm</filing-href>
+        <filing-type>NPORT-P/A</filing-type>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0001410368-26-100002</id>
+      <title>NPORT-P/A  - Monthly Portfolio Investments Report on Form N-PORT (Public)</title>
+      <updated>2026-09-20T12:00:00-04:00</updated>
+    </entry>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P/A" />
+      <content type="text/xml">
+        <accession-number>0001410368-26-100001</accession-number>
+        <filing-date>2026-09-15</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/1064641/000141036826100001/0001410368-26-100001-index.htm</filing-href>
+        <filing-type>NPORT-P/A</filing-type>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0001410368-26-100001</id>
+      <title>NPORT-P/A  - Monthly Portfolio Investments Report on Form N-PORT (Public)</title>
+      <updated>2026-09-15T12:00:00-04:00</updated>
+    </entry>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P" />
+      <content type="text/xml">
+        <accession-number>0001410368-26-089594</accession-number>
+        <filing-date>2026-08-28</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/1064641/000141036826089594/0001410368-26-089594-index.htm</filing-href>
+        <filing-type>NPORT-P</filing-type>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0001410368-26-089594</id>
+      <title>NPORT-P  - Monthly Portfolio Investments Report on Form N-PORT (Public)</title>
+      <updated>2026-08-28T12:00:00-04:00</updated>
+    </entry>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="NPORT-P" />
+      <content type="text/xml">
+        <accession-number>0001410368-26-055328</accession-number>
+        <filing-date>2026-05-28</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/1064641/000141036826055328/0001410368-26-055328-index.htm</filing-href>
+        <filing-type>NPORT-P</filing-type>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0001410368-26-055328</id>
+      <title>NPORT-P  - Monthly Portfolio Investments Report on Form N-PORT (Public)</title>
+      <updated>2026-05-28T12:00:00-04:00</updated>
+    </entry>
+  </feed>
