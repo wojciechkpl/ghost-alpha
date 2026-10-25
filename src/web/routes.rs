@@ -5,80 +5,10 @@ use serde::Deserialize;
 
 use crate::storage::db::Repository;
 
+use super::shell::{html_escape, shell};
 use super::AppState;
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-
-/// Wrap page content in a full HTML document with shared navigation and assets.
-fn layout(title: &str, body: &str) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ghost Alpha — {title}</title>
-  <link rel="stylesheet" href="/static/pico.min.css">
-  <link rel="stylesheet" href="/static/ghost-alpha.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <style>
-    :root {{ --pico-font-size: 14px; }}
-    nav a {{ margin-right: 1rem; }}
-    .badge-critical {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-warning  {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-info     {{ background: #74c0fc; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-bull     {{ background: #51cf66; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-bear     {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-sideways {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-aplus {{ background: #2b8a3e; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-a  {{ background: #37b24d; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-b  {{ background: #74c0fc; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-c  {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-d  {{ background: #fd7e14; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-f  {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .empty-state    {{ color: #888; font-style: italic; }}
-  </style>
-</head>
-<body>
-  <main class="container">
-    <nav>
-      <strong>Ghost Alpha</strong> &nbsp;
-      <a href="/">Home</a>
-      <a href="/alerts">Alerts</a>
-      <a href="/watchlist">Watchlist</a>
-      <a href="/regime">Regime</a>
-      <a href="/flagged">Flagged</a>
-      <a href="/analytics">Analytics</a>
-      <a href="/strategies">Strategies</a>
-      <a href="/portfolio">Portfolio</a>
-      <a href="/correlation">Correlation</a>
-      <a href="/valuation">Valuation</a>
-      <a href="/tax">Tax</a>
-      <a href="/optimize">Optimize</a>
-      <a href="/etf">ETF</a>
-      <a href="/selling">Selling</a>
-      <a href="/decisions">Decisions</a>
-      <a href="/fundamentals">Fundamentals</a>
-      <a href="/settings">Settings</a>
-    </nav>
-    <hr>
-    {body}
-  </main>
-</body>
-</html>"#
-    )
-}
-
 // ─── Utilities ────────────────────────────────────────────────────────────────
-
-/// Minimal HTML escaping to prevent XSS from data stored in the DB.
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
 
 /// Return a CSS class for a grade badge.
 fn grade_badge(grade: &crate::analysis::scorer::Grade) -> String {
@@ -181,8 +111,8 @@ pub async fn home(State(state): State<AppState>) -> Html<String> {
     let target_screen = "hx-target=\"#screen-tbody\"";
     let tbody_id = "id=\"screen-tbody\"";
     let body = format!(
-        r#"<h1>Screening Results &nbsp; {regime_badge}</h1>
-<p>{regime_detail}</p>
+        r#"<p>{regime_badge} {regime_detail}</p>
+<p id="screen-status" class="sr-only" role="status"></p>
 <div style="margin-bottom:1rem;">
   <label>Date:
     <input type="date" value="{today_str}"
@@ -194,13 +124,13 @@ pub async fn home(State(state): State<AppState>) -> Html<String> {
   </label>
 </div>
 <figure>
-<table>
+<table><caption class="sr-only">Screening results ranked by score; close in USD, relative strength in percent</caption>
   <thead>
     <tr>
-      <th>#</th><th>Ticker</th><th>Score</th><th>Grade</th><th>Minervini</th><th>RS%</th><th>Vol-Z</th><th>Close</th><th>Cond</th>
+      <th scope="col">#</th><th scope="col">Ticker</th><th scope="col">Score</th><th scope="col">Grade</th><th scope="col">Minervini</th><th scope="col">RS%</th><th scope="col">Vol-Z</th><th scope="col">Close</th><th scope="col">Cond</th>
     </tr>
   </thead>
-  <tbody {tbody_id} hx-get="/partials/screen-table" hx-trigger="every 60s" hx-swap="innerHTML">
+  <tbody {tbody_id} hx-get="/partials/screen-table" hx-trigger="every 60s" hx-include="[name=date]" hx-swap="innerHTML">
     {table_body}
   </tbody>
 </table>
@@ -208,7 +138,7 @@ pub async fn home(State(state): State<AppState>) -> Html<String> {
 <p><small>Showing results for today. Results are saved automatically after each <code>ghost-alpha screen</code> run.</small></p>"#
     );
 
-    Html(layout("Home", &body))
+    Html(shell("/", "Screening Results", &body))
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -224,17 +154,16 @@ pub async fn alerts_page(State(state): State<AppState>) -> Html<String> {
     let table_body = render_alert_rows(&alerts, None);
 
     let body = format!(
-        r#"<h1>Alert History</h1>
-<h2>Alert Activity</h2>
+        r#"<h2>Alert Activity</h2>
 <div id="alert-calendar" class="chart-container"
      hx-get="/partials/alert-calendar" hx-trigger="load">
   <p class="empty-state">Loading alert calendar...</p>
 </div>
 <figure>
-<table>
+<table><caption class="sr-only">Alert history, newest first</caption>
   <thead>
     <tr>
-      <th>Ticker</th><th>Type</th><th>Severity</th><th>Message</th><th>Sent At</th>
+      <th scope="col">Ticker</th><th scope="col">Type</th><th scope="col">Severity</th><th scope="col">Message</th><th scope="col">Sent At</th>
     </tr>
   </thead>
   <tbody id="alert-tbody" hx-get="/partials/alert-list" hx-trigger="every 60s" hx-swap="innerHTML">
@@ -244,7 +173,7 @@ pub async fn alerts_page(State(state): State<AppState>) -> Html<String> {
 </figure>"#
     );
 
-    Html(layout("Alerts", &body))
+    Html(shell("/alerts", "Alert History", &body))
 }
 
 // ─── Watchlist ────────────────────────────────────────────────────────────────
@@ -275,15 +204,14 @@ pub async fn watchlist_page(State(state): State<AppState>) -> Html<String> {
     let wl_tbody_id = "id=\"watchlist-tbody\"";
     let wl_target = "hx-target=\"#watchlist-tbody\"";
     let body = format!(
-        r#"<h1>Watchlist</h1>
-<figure>
-<table>
+        r#"<figure>
+<table><caption class="sr-only">Watchlist tickers with latest score, grade and notes</caption>
   <thead>
     <tr>
-      <th>Ticker</th><th>Added</th><th>Score</th><th>Grade</th><th>Notes</th><th>Action</th>
+      <th scope="col">Ticker</th><th scope="col">Added</th><th scope="col">Score</th><th scope="col">Grade</th><th scope="col">Notes</th><th scope="col">Action</th>
     </tr>
   </thead>
-  <tbody {wl_tbody_id}>
+  <tbody {wl_tbody_id} aria-live="polite">
     {table_body}
   </tbody>
 </table>
@@ -304,7 +232,7 @@ pub async fn watchlist_page(State(state): State<AppState>) -> Html<String> {
 </form>"#
     );
 
-    Html(layout("Watchlist", &body))
+    Html(shell("/watchlist", "Watchlist", &body))
 }
 
 // ─── Regime ───────────────────────────────────────────────────────────────────
@@ -339,12 +267,12 @@ pub async fn regime_page(State(state): State<AppState>) -> Html<String> {
             let _ = label;
             format!(
                 r#"<p>Current Regime: {badge}</p>
-<table>
+<table><caption class="sr-only">Latest regime snapshot: SPY levels in USD, market breadth in percent</caption>
   <tbody>
-    <tr><th>Date</th><td>{}</td></tr>
-    <tr><th>SPY Close</th><td>${:.2}</td></tr>
-    <tr><th>SPY SMA200</th><td>${:.2}</td></tr>
-    <tr><th>Market Breadth</th><td>{:.1}%</td></tr>
+    <tr><th scope="row">Date</th><td>{}</td></tr>
+    <tr><th scope="row">SPY Close</th><td>${:.2}</td></tr>
+    <tr><th scope="row">SPY SMA200</th><td>${:.2}</td></tr>
+    <tr><th scope="row">Market Breadth</th><td>{:.1}%</td></tr>
   </tbody>
 </table>"#,
                 r.date, r.spy_close, r.spy_sma200, r.breadth_pct
@@ -367,12 +295,12 @@ pub async fn regime_page(State(state): State<AppState>) -> Html<String> {
                 .unwrap_or_else(|| "N/A".to_string());
             format!(
                 r#"<h2>Macro Risk</h2>
-<table>
+<table><caption class="sr-only">Macro risk indicators: VIX, high-yield spread and yield curve</caption>
   <tbody>
-    <tr><th>Risk Level</th><td><strong>{risk_display}</strong></td></tr>
-    <tr><th>VIX</th><td>{vix}</td></tr>
-    <tr><th>HY OAS</th><td>{hy_oas}</td></tr>
-    <tr><th>Yield Curve (2s10s)</th><td>{yc}</td></tr>
+    <tr><th scope="row">Risk Level</th><td><strong>{risk_display}</strong></td></tr>
+    <tr><th scope="row">VIX</th><td>{vix}</td></tr>
+    <tr><th scope="row">HY OAS</th><td>{hy_oas}</td></tr>
+    <tr><th scope="row">Yield Curve (2s10s)</th><td>{yc}</td></tr>
   </tbody>
 </table>"#
             )
@@ -381,8 +309,7 @@ pub async fn regime_page(State(state): State<AppState>) -> Html<String> {
     };
 
     let body = format!(
-        r#"<h1>Market Regime</h1>
-{regime_section}
+        r#"{regime_section}
 <h2>Regime History</h2>
 <div id="regime-history" class="chart-container"
      hx-get="/partials/regime-history" hx-trigger="load">
@@ -396,7 +323,7 @@ pub async fn regime_page(State(state): State<AppState>) -> Html<String> {
 </div>"#
     );
 
-    Html(layout("Regime", &body))
+    Html(shell("/regime", "Market Regime", &body))
 }
 
 // ─── Flagged Stocks ──────────────────────────────────────────────────────────
@@ -438,12 +365,11 @@ pub async fn flagged_page(State(state): State<AppState>) -> Html<String> {
     };
 
     let body = format!(
-        r#"<h1>Flagged Stocks</h1>
-<figure>
-<table>
+        r#"<figure>
+<table><caption class="sr-only">Flagged stocks with entry and current scores</caption>
   <thead>
     <tr>
-      <th>Ticker</th><th>Entry Date</th><th>Entry Score</th><th>Entry Price</th><th>Current Score</th><th>Status</th><th>Exit Reason</th>
+      <th scope="col">Ticker</th><th scope="col">Entry Date</th><th scope="col">Entry Score</th><th scope="col">Entry Price</th><th scope="col">Current Score</th><th scope="col">Status</th><th scope="col">Exit Reason</th>
     </tr>
   </thead>
   <tbody>
@@ -453,17 +379,16 @@ pub async fn flagged_page(State(state): State<AppState>) -> Html<String> {
 </figure>"#
     );
 
-    Html(layout("Flagged", &body))
+    Html(shell("/flagged", "Flagged Stocks", &body))
 }
 
 // ─── Strategies ──────────────────────────────────────────────────────────────
 
 pub async fn strategies_page() -> Html<String> {
-    let body = r#"<h1>Strategies</h1>
-<figure>
-<table>
+    let body = r#"<figure>
+<table><caption class="sr-only">Available screening strategies and their descriptions</caption>
   <thead>
-    <tr><th>Name</th><th>Description</th></tr>
+    <tr><th scope="col">Name</th><th scope="col">Description</th></tr>
   </thead>
   <tbody>
     <tr><td><strong>minervini</strong></td><td>Mark Minervini Trend Template: 8-condition check for Stage 2 uptrend qualification. Requires price above key moving averages, rising 200-SMA, and price within 25% of 52-week high.</td></tr>
@@ -474,7 +399,7 @@ pub async fn strategies_page() -> Html<String> {
 </table>
 </figure>"#;
 
-    Html(layout("Strategies", body))
+    Html(shell("/strategies", "Strategies", body))
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────
@@ -500,21 +425,20 @@ pub async fn settings_page(State(state): State<AppState>) -> Html<String> {
     };
 
     let body = format!(
-        r#"<h1>Settings</h1>
-<figure>
-<table>
+        r#"<figure>
+<table><caption class="sr-only">Active configuration values and alert thresholds</caption>
   <tbody>
-    <tr><th>Active Provider</th><td>{provider}</td></tr>
-    <tr><th>Active Screener</th><td>{screener}</td></tr>
-    <tr><th>Finnhub API Key</th><td>{finnhub_key}</td></tr>
-    <tr><th>Database Path</th><td><code>{db_path}</code></td></tr>
-    <tr><th>Telegram</th><td>{telegram_status}</td></tr>
-    <tr><th>Discord</th><td>{discord_status}</td></tr>
-    <tr><th>Critical Threshold</th><td>{:.1}</td></tr>
-    <tr><th>Warning Threshold</th><td>{:.1}</td></tr>
-    <tr><th>Info Threshold</th><td>{:.1}</td></tr>
-    <tr><th>Dedup Cooldown</th><td>{} days</td></tr>
-    <tr><th>Max Daily Alerts</th><td>{}</td></tr>
+    <tr><th scope="row">Active Provider</th><td>{provider}</td></tr>
+    <tr><th scope="row">Active Screener</th><td>{screener}</td></tr>
+    <tr><th scope="row">Finnhub API Key</th><td>{finnhub_key}</td></tr>
+    <tr><th scope="row">Database Path</th><td><code>{db_path}</code></td></tr>
+    <tr><th scope="row">Telegram</th><td>{telegram_status}</td></tr>
+    <tr><th scope="row">Discord</th><td>{discord_status}</td></tr>
+    <tr><th scope="row">Critical Threshold</th><td>{:.1}</td></tr>
+    <tr><th scope="row">Warning Threshold</th><td>{:.1}</td></tr>
+    <tr><th scope="row">Info Threshold</th><td>{:.1}</td></tr>
+    <tr><th scope="row">Dedup Cooldown</th><td>{} days</td></tr>
+    <tr><th scope="row">Max Daily Alerts</th><td>{}</td></tr>
   </tbody>
 </table>
 </figure>"#,
@@ -525,7 +449,7 @@ pub async fn settings_page(State(state): State<AppState>) -> Html<String> {
         config.alerts.max_daily_alerts,
     );
 
-    Html(layout("Settings", &body))
+    Html(shell("/settings", "Settings", &body))
 }
 
 fn mask_secret(s: &str) -> String {
@@ -798,8 +722,7 @@ fn render_watchlist_rows(
 // ─── Analytics page ──────────────────────────────────────────────────────────
 
 pub async fn analytics_page(State(_state): State<AppState>) -> Html<String> {
-    let body = r##"<h1>Analytics</h1>
-
+    let body = r##"
 <h2>Composite Score Heatmap</h2>
 <div class="filter-bar">
   <label>Days: <input type="number" name="days" value="30" min="7" max="90"
@@ -809,6 +732,7 @@ pub async fn analytics_page(State(_state): State<AppState>) -> Html<String> {
          hx-get="/partials/score-heatmap" hx-trigger="change"
          hx-target="#score-heatmap" hx-include="[name=days]"></label>
 </div>
+<p id="analytics-status" class="sr-only" role="status"></p>
 <div id="score-heatmap" class="chart-container"
      hx-get="/partials/score-heatmap?days=30" hx-trigger="load">
   <p class="empty-state">Loading score heatmap...</p>
@@ -832,7 +756,7 @@ pub async fn analytics_page(State(_state): State<AppState>) -> Html<String> {
   <p class="empty-state">Loading RS scatter plot...</p>
 </div>"##;
 
-    Html(layout("Analytics", body))
+    Html(shell("/analytics", "Analytics", body))
 }
 
 // ─── Analytics partial endpoints ─────────────────────────────────────────────
@@ -1933,11 +1857,11 @@ mod tests {
     async fn layout_uses_embedded_assets_not_cdn() {
         let (_, body) = get_body("/").await;
         assert!(
-            body.contains(r#"href="/static/pico.min.css""#),
+            body.contains(r#"href="/static/pico.min.css?v="#),
             "expected embedded pico.min.css"
         );
         assert!(
-            body.contains(r#"src="/static/htmx.min.js""#),
+            body.contains(r#"src="/static/htmx.min.js?v="#),
             "expected embedded htmx.min.js"
         );
         assert!(!body.contains("cdn.jsdelivr.net"), "must not reference CDN");

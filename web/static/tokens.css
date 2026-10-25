@@ -1,0 +1,175 @@
+/* Ghost Alpha design tokens. Colours meet WCAG AA (4.5:1 text, 3:1 UI/graphics)
+   on both --ga-bg and --ga-surface in every theme. [data-theme] overrides must
+   stay after the prefers-color-scheme block so a user choice wins. */
+
+:root {
+  --ga-space-1: 0.25rem;
+  --ga-space-2: 0.5rem;
+  --ga-space-3: 1rem;
+  --ga-space-4: 1.5rem;
+  --ga-radius: 4px;
+  --ga-font-chart: 12px;
+  --ga-bg: #ffffff;
+  --ga-surface: #f6f8fa;
+  --ga-border: #d0d7de;
+  --ga-text: #1f2328;
+  --ga-muted: #57606a;
+  --ga-pos: #1a7f37;
+  --ga-neg: #cf222e;
+  --ga-warn: #8a4b00;
+  --ga-info: #0550ae;
+  --ga-focus: #0969da;
+  --ga-series-1: #0969da;
+  --ga-series-2: #bc4c00;
+  --ga-series-3: #1a7f37;
+  --ga-series-4: #8250df;
+  --ga-badge-critical-bg: #cf222e;
+  --ga-badge-critical-fg: #ffffff;
+  --ga-badge-warning-bg: #fff8c5;
+  --ga-badge-warning-fg: #5c3d00;
+  --ga-badge-info-bg: #ddf4ff;
+  --ga-badge-info-fg: #0550ae;
+  --ga-badge-bull-bg: #dafbe1;
+  --ga-badge-bull-fg: #116329;
+  --ga-badge-bear-bg: #ffebe9;
+  --ga-badge-bear-fg: #a40e26;
+  --ga-badge-sideways-bg: #eaeef2;
+  --ga-badge-sideways-fg: #424a53;
+  --ga-badge-grade-aplus-bg: #116329;
+  --ga-badge-grade-aplus-fg: #ffffff;
+  --ga-badge-grade-a-bg: #1a7f37;
+  --ga-badge-grade-a-fg: #ffffff;
+  --ga-badge-grade-b-bg: #0969da;
+  --ga-badge-grade-b-fg: #ffffff;
+  --ga-badge-grade-c-bg: #fff8c5;
+  --ga-badge-grade-c-fg: #5c3d00;
+  --ga-badge-grade-d-bg: #a04100;
+  --ga-badge-grade-d-fg: #ffffff;
+  --ga-badge-grade-f-bg: #cf222e;
+  --ga-badge-grade-f-fg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ga-bg: #0d1117;
+    --ga-surface: #161b22;
+    --ga-border: #30363d;
+    --ga-text: #e6edf3;
+    --ga-muted: #9ea7b3;
+    --ga-pos: #3fb950;
+    --ga-neg: #ff7b72;
+    --ga-warn: #d29922;
+    --ga-info: #58a6ff;
+    --ga-focus: #58a6ff;
+    --ga-series-1: #58a6ff;
+    --ga-series-2: #f0883e;
+    --ga-series-3: #3fb950;
+    --ga-series-4: #bc8cff;
+    --ga-badge-critical-bg: #da3633;
+    --ga-badge-critical-fg: #ffffff;
+    --ga-badge-warning-bg: #4d3800;
+    --ga-badge-warning-fg: #f2cc60;
+    --ga-badge-info-bg: #0c2d6b;
+    --ga-badge-info-fg: #a5d6ff;
+    --ga-badge-bull-bg: #0f3d1d;
+    --ga-badge-bull-fg: #7ee787;
+    --ga-badge-bear-bg: #5c1a1b;
+    --ga-badge-bear-fg: #ffa198;
+    --ga-badge-sideways-bg: #30363d;
+    --ga-badge-sideways-fg: #c9d1d9;
+    --ga-badge-grade-aplus-bg: #1a7f37;
+    --ga-badge-grade-aplus-fg: #ffffff;
+    --ga-badge-grade-a-bg: #238636;
+    --ga-badge-grade-a-fg: #ffffff;
+    --ga-badge-grade-b-bg: #1f6feb;
+    --ga-badge-grade-b-fg: #ffffff;
+    --ga-badge-grade-c-bg: #4d3800;
+    --ga-badge-grade-c-fg: #f2cc60;
+    --ga-badge-grade-d-bg: #a04100;
+    --ga-badge-grade-d-fg: #ffffff;
+    --ga-badge-grade-f-bg: #da3633;
+    --ga-badge-grade-f-fg: #ffffff;
+  }
+}
+
+[data-theme="light"] {
+  --ga-bg: #ffffff;
+  --ga-surface: #f6f8fa;
+  --ga-border: #d0d7de;
+  --ga-text: #1f2328;
+  --ga-muted: #57606a;
+  --ga-pos: #1a7f37;
+  --ga-neg: #cf222e;
+  --ga-warn: #8a4b00;
+  --ga-info: #0550ae;
+  --ga-focus: #0969da;
+  --ga-series-1: #0969da;
+  --ga-series-2: #bc4c00;
+  --ga-series-3: #1a7f37;
+  --ga-series-4: #8250df;
+  --ga-badge-critical-bg: #cf222e;
+  --ga-badge-critical-fg: #ffffff;
+  --ga-badge-warning-bg: #fff8c5;
+  --ga-badge-warning-fg: #5c3d00;
+  --ga-badge-info-bg: #ddf4ff;
+  --ga-badge-info-fg: #0550ae;
+  --ga-badge-bull-bg: #dafbe1;
+  --ga-badge-bull-fg: #116329;
+  --ga-badge-bear-bg: #ffebe9;
+  --ga-badge-bear-fg: #a40e26;
+  --ga-badge-sideways-bg: #eaeef2;
+  --ga-badge-sideways-fg: #424a53;
+  --ga-badge-grade-aplus-bg: #116329;
+  --ga-badge-grade-aplus-fg: #ffffff;
+  --ga-badge-grade-a-bg: #1a7f37;
+  --ga-badge-grade-a-fg: #ffffff;
+  --ga-badge-grade-b-bg: #0969da;
+  --ga-badge-grade-b-fg: #ffffff;
+  --ga-badge-grade-c-bg: #fff8c5;
+  --ga-badge-grade-c-fg: #5c3d00;
+  --ga-badge-grade-d-bg: #a04100;
+  --ga-badge-grade-d-fg: #ffffff;
+  --ga-badge-grade-f-bg: #cf222e;
+  --ga-badge-grade-f-fg: #ffffff;
+}
+
+[data-theme="dark"] {
+  --ga-bg: #0d1117;
+  --ga-surface: #161b22;
+  --ga-border: #30363d;
+  --ga-text: #e6edf3;
+  --ga-muted: #9ea7b3;
+  --ga-pos: #3fb950;
+  --ga-neg: #ff7b72;
+  --ga-warn: #d29922;
+  --ga-info: #58a6ff;
+  --ga-focus: #58a6ff;
+  --ga-series-1: #58a6ff;
+  --ga-series-2: #f0883e;
+  --ga-series-3: #3fb950;
+  --ga-series-4: #bc8cff;
+  --ga-badge-critical-bg: #da3633;
+  --ga-badge-critical-fg: #ffffff;
+  --ga-badge-warning-bg: #4d3800;
+  --ga-badge-warning-fg: #f2cc60;
+  --ga-badge-info-bg: #0c2d6b;
+  --ga-badge-info-fg: #a5d6ff;
+  --ga-badge-bull-bg: #0f3d1d;
+  --ga-badge-bull-fg: #7ee787;
+  --ga-badge-bear-bg: #5c1a1b;
+  --ga-badge-bear-fg: #ffa198;
+  --ga-badge-sideways-bg: #30363d;
+  --ga-badge-sideways-fg: #c9d1d9;
+  --ga-badge-grade-aplus-bg: #1a7f37;
+  --ga-badge-grade-aplus-fg: #ffffff;
+  --ga-badge-grade-a-bg: #238636;
+  --ga-badge-grade-a-fg: #ffffff;
+  --ga-badge-grade-b-bg: #1f6feb;
+  --ga-badge-grade-b-fg: #ffffff;
+  --ga-badge-grade-c-bg: #4d3800;
+  --ga-badge-grade-c-fg: #f2cc60;
+  --ga-badge-grade-d-bg: #a04100;
+  --ga-badge-grade-d-fg: #ffffff;
+  --ga-badge-grade-f-bg: #da3633;
+  --ga-badge-grade-f-fg: #ffffff;
+}

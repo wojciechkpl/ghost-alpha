@@ -1,54 +1,151 @@
-/* Ghost Alpha — Dashboard Custom Styles */
+/* Ghost Alpha — Dashboard Custom Styles
+   Colours come exclusively from tokens.css (var(--ga-*)); no literals here. */
 
 :root {
   --pico-font-size: 14px;
-  --ga-green: #51cf66;
-  --ga-red: #e03131;
-  --ga-orange: #fd7e14;
-  --ga-yellow: #ffd43b;
-  --ga-blue: #74c0fc;
-  --ga-teal: #20c997;
-  --ga-dark: #1a1b26;
 }
 
-/* ── Navigation ───────────────────────────────────────────────────────────── */
+/* ── Accessibility helpers ────────────────────────────────────────────────── */
 
-nav a { margin-right: 1rem; text-decoration: none; }
-nav a.active { font-weight: bold; text-decoration: underline; }
-nav .brand { font-weight: bold; margin-right: 1.5rem; }
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: var(--ga-space-2) var(--ga-space-3);
+  background: var(--ga-surface);
+  color: var(--ga-text);
+  border: 2px solid var(--ga-focus);
+}
+
+.skip-link:focus {
+  left: var(--ga-space-2);
+  top: var(--ga-space-2);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ga-focus);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Pico variable mapping ────────────────────────────────────────────────
+   Same selectors as Pico's own theme blocks (and later in the cascade), so Pico
+   follows the --ga-* tokens in light, dark and prefers-color-scheme modes. */
+
+:root:not([data-theme=dark]),
+[data-theme=light],
+[data-theme=dark] {
+  --pico-background-color: var(--ga-bg);
+  --pico-color: var(--ga-text);
+  --pico-muted-color: var(--ga-muted);
+  --pico-card-background-color: var(--ga-surface);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --pico-background-color: var(--ga-bg);
+    --pico-color: var(--ga-text);
+    --pico-muted-color: var(--ga-muted);
+    --pico-card-background-color: var(--ga-surface);
+  }
+}
+
+button,
+[type="submit"],
+[type="button"] { min-height: 1.75rem; }
+
+/* ── Header & navigation ──────────────────────────────────────────────────── */
+
+.site-header { padding-top: var(--ga-space-3); }
+.site-header .brand { font-size: 1.2em; }
+
+.site-nav { display: block; }
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  text-decoration: none;
+}
+.site-nav a[aria-current="page"] { font-weight: bold; text-decoration: underline; }
+
+.nav-menu { margin-bottom: var(--ga-space-2); }
+.nav-menu > summary { display: none; }
+
+.nav-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ga-space-2) var(--ga-space-4);
+  padding-bottom: var(--ga-space-2);
+  border-bottom: 1px solid var(--ga-border);
+}
+
+.nav-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ga-space-1) var(--ga-space-3);
+}
+
+.nav-group-label {
+  color: var(--ga-muted);
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 /* ── Badges ───────────────────────────────────────────────────────────────── */
 
-.badge {
+.badge,
+.badge-critical, .badge-warning, .badge-info,
+.badge-bull, .badge-bear, .badge-sideways,
+.badge-grade-aplus, .badge-grade-a, .badge-grade-b,
+.badge-grade-c, .badge-grade-d, .badge-grade-f {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--ga-radius);
   font-size: 0.85em;
   font-weight: 600;
   line-height: 1.4;
 }
 
-.badge-critical { background: var(--ga-red); color: #fff; }
-.badge-warning  { background: var(--ga-yellow); color: #000; }
-.badge-info     { background: var(--ga-blue); color: #000; }
+.badge-critical    { background: var(--ga-badge-critical-bg); color: var(--ga-badge-critical-fg); }
+.badge-warning     { background: var(--ga-badge-warning-bg); color: var(--ga-badge-warning-fg); }
+.badge-info        { background: var(--ga-badge-info-bg); color: var(--ga-badge-info-fg); }
+.badge-bull        { background: var(--ga-badge-bull-bg); color: var(--ga-badge-bull-fg); }
+.badge-bear        { background: var(--ga-badge-bear-bg); color: var(--ga-badge-bear-fg); }
+.badge-sideways    { background: var(--ga-badge-sideways-bg); color: var(--ga-badge-sideways-fg); }
+.badge-grade-aplus { background: var(--ga-badge-grade-aplus-bg); color: var(--ga-badge-grade-aplus-fg); }
+.badge-grade-a     { background: var(--ga-badge-grade-a-bg); color: var(--ga-badge-grade-a-fg); }
+.badge-grade-b     { background: var(--ga-badge-grade-b-bg); color: var(--ga-badge-grade-b-fg); }
+.badge-grade-c     { background: var(--ga-badge-grade-c-bg); color: var(--ga-badge-grade-c-fg); }
+.badge-grade-d     { background: var(--ga-badge-grade-d-bg); color: var(--ga-badge-grade-d-fg); }
+.badge-grade-f     { background: var(--ga-badge-grade-f-bg); color: var(--ga-badge-grade-f-fg); }
 
-.badge-bull     { background: var(--ga-green); color: #fff; }
-.badge-bear     { background: var(--ga-red); color: #fff; }
-.badge-sideways { background: var(--ga-yellow); color: #000; }
-
-/* ── Grade Badges ─────────────────────────────────────────────────────────── */
-
-.grade-aplus { background: #2b8a3e; color: #fff; }
-.grade-a     { background: var(--ga-green); color: #fff; }
-.grade-b     { background: var(--ga-teal); color: #fff; }
-.grade-c     { background: var(--ga-yellow); color: #000; }
-.grade-d     { background: var(--ga-orange); color: #fff; }
-.grade-f     { background: var(--ga-red); color: #fff; }
+/* Status badges carry an icon so meaning never depends on colour alone. */
+.badge-critical::before { content: "\2716\00a0"; }
+.badge-warning::before  { content: "\26A0\00a0"; }
+.badge-info::before     { content: "\2139\00a0"; }
+.badge-bull::before     { content: "\25B2\00a0"; }
+.badge-bear::before     { content: "\25BC\00a0"; }
+.badge-sideways::before { content: "\25C6\00a0"; }
 
 /* ── Status Indicators ────────────────────────────────────────────────────── */
 
-.pass { color: var(--ga-green); font-weight: bold; }
-.fail { color: var(--ga-red); font-weight: bold; }
+.pass { color: var(--ga-pos); font-weight: bold; }
+.fail { color: var(--ga-neg); font-weight: bold; }
 
 /* ── Tables ───────────────────────────────────────────────────────────────── */
 
@@ -56,7 +153,7 @@ table th[data-sort] { cursor: pointer; user-select: none; }
 table th[data-sort]:hover { text-decoration: underline; }
 
 .empty-state {
-  color: #888;
+  color: var(--ga-muted);
   font-style: italic;
   text-align: center;
   padding: 2rem;
@@ -88,9 +185,9 @@ table th[data-sort]:hover { text-decoration: underline; }
 
 /* ── Flagged stocks ───────────────────────────────────────────────────────── */
 
-.status-active  { color: var(--ga-green); font-weight: bold; }
-.status-exited  { color: var(--ga-red); }
-.status-expired { color: #888; }
+.status-active  { color: var(--ga-pos); font-weight: bold; }
+.status-exited  { color: var(--ga-neg); }
+.status-expired { color: var(--ga-muted); }
 
 /* ── SVG charts ───────────────────────────────────────────────────────────── */
 
@@ -108,7 +205,7 @@ table th[data-sort]:hover { text-decoration: underline; }
 .gauge-panel { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; margin: 1.5rem 0; }
 .gauge-item { text-align: center; }
 .gauge-item svg { display: block; margin: 0 auto; }
-.gauge-label { font-size: 0.85em; color: #868e96; margin-top: 0.25rem; }
+.gauge-label { font-size: 0.85em; color: var(--ga-muted); margin-top: 0.25rem; }
 
 /* ── Portfolio & Dashboard ────────────────────────────────────────────────── */
 
@@ -120,7 +217,7 @@ table th[data-sort]:hover { text-decoration: underline; }
 }
 
 .dashboard-card {
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--ga-border);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -128,22 +225,22 @@ table th[data-sort]:hover { text-decoration: underline; }
 .dashboard-card h3 {
   margin-top: 0;
   font-size: 1rem;
-  color: #495057;
+  color: var(--ga-text);
 }
 
 .stat-row {
   display: flex;
   justify-content: space-between;
   padding: 0.25rem 0;
-  border-bottom: 1px solid #f1f3f5;
+  border-bottom: 1px solid var(--ga-border);
 }
 
-.stat-label { color: #868e96; font-size: 0.9em; }
+.stat-label { color: var(--ga-muted); font-size: 0.9em; }
 .stat-value { font-weight: 600; }
 
-.pl-positive { color: var(--ga-green); }
-.pl-negative { color: var(--ga-red); }
-.pl-zero { color: #868e96; }
+.pl-positive { color: var(--ga-pos); }
+.pl-negative { color: var(--ga-neg); }
+.pl-zero { color: var(--ga-muted); }
 
 /* ── Correlation Matrix ──────────────────────────────────────────────────── */
 
@@ -203,20 +300,18 @@ table th[data-sort]:hover { text-decoration: underline; }
   margin: 1rem 0;
 }
 
-/* ── Nav wrapping for many links ─────────────────────────────────────────── */
+/* ── Gain / loss helpers ─────────────────────────────────────────────────── */
 
-nav {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-}
+.gain { color: var(--ga-pos); }
+.loss { color: var(--ga-neg); }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
   .filter-bar { flex-direction: column; }
-  nav a { margin-right: 0.5rem; font-size: 0.9em; }
+  .nav-menu > summary { display: block; cursor: pointer; font-weight: 600; }
+  .nav-groups { flex-direction: column; }
+  .nav-group { font-size: 0.95em; }
   .gauge-panel { gap: 0.75rem; }
   .gauge-item svg { width: 90px; height: 90px; }
 }

@@ -60,7 +60,7 @@ tokenizers   = { version = "0.15", optional = true }
 
 # Web dashboard (ghost-alpha serve)
 axum         = "0.7"
-tower-http   = { version = "0.5", features = ["cors"] }
+tower-http   = { version = "0.5", features = ["compression-gzip"] }
 tower        = { version = "0.4", features = ["util"] }
 rust-embed   = "8"
 mime_guess   = "2"

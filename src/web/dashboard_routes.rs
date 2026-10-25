@@ -15,88 +15,10 @@ use crate::web::charts::{
     TimelinePeriod,
 };
 
+use super::shell::{html_escape, shell};
 use super::AppState;
 
-// ─── Layout ─────────────────────────────────────────────────────────────────
-
-/// Full HTML layout with the expanded navigation bar covering all dashboard pages.
-pub fn dashboard_layout(title: &str, body: &str) -> String {
-    let escaped_title = html_escape(title);
-    format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ghost Alpha — {escaped_title}</title>
-  <link rel="stylesheet" href="/static/pico.min.css">
-  <link rel="stylesheet" href="/static/ghost-alpha.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <style>
-    :root {{ --pico-font-size: 14px; }}
-    nav a {{ margin-right: 1rem; }}
-    .badge-critical {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-warning  {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-info     {{ background: #74c0fc; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-bull     {{ background: #51cf66; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-bear     {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-sideways {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-aplus {{ background: #2b8a3e; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-a  {{ background: #37b24d; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-b  {{ background: #74c0fc; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-c  {{ background: #ffd43b; color: #000; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-d  {{ background: #fd7e14; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .badge-grade-f  {{ background: #ff6b6b; color: #fff; padding: 2px 8px; border-radius: 4px; }}
-    .empty-state    {{ color: #888; font-style: italic; }}
-    .chart-container {{ margin: 1rem 0; overflow-x: auto; }}
-    .gain            {{ color: #2b8a3e; }}
-    .loss            {{ color: #e03131; }}
-  </style>
-</head>
-<body>
-  <main class="container">
-    <nav>
-      <strong>Ghost Alpha</strong> &nbsp;
-      <a href="/">Home</a>
-      <a href="/alerts">Alerts</a>
-      <a href="/watchlist">Watchlist</a>
-      <a href="/regime">Regime</a>
-      <a href="/flagged">Flagged</a>
-      <a href="/analytics">Analytics</a>
-      <a href="/strategies">Strategies</a>
-      <a href="/portfolio">Portfolio</a>
-      <a href="/correlation">Correlation</a>
-      <a href="/valuation">Valuation</a>
-      <a href="/tax">Tax</a>
-      <a href="/optimize">Optimize</a>
-      <a href="/etf">ETF</a>
-      <a href="/selling">Selling</a>
-      <a href="/allocation">Allocation</a>
-      <a href="/geo-risk">Geo Risk</a>
-      <a href="/rotation">Rotation</a>
-      <a href="/sizing">Sizing</a>
-      <a href="/decisions">Decisions</a>
-      <a href="/fundamentals">Fundamentals</a>
-      <a href="/settings">Settings</a>
-    </nav>
-    <hr>
-    {body}
-  </main>
-</body>
-</html>"#
-    )
-}
-
 // ─── Utilities ──────────────────────────────────────────────────────────────
-
-/// Minimal HTML escaping to prevent XSS from data stored in the DB.
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
 
 /// Format an optional f64 to a fixed-decimal string, or a dash for `None`.
 fn fmt_opt(v: Option<f64>, decimals: usize) -> String {
@@ -150,9 +72,8 @@ pub async fn portfolio_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     if lots.is_empty() {
-        let body = r#"<h2>Portfolio Overview</h2>
-<p class="empty-state">No portfolio data. Import via <code>ghost-alpha portfolio import</code></p>"#;
-        return Html(dashboard_layout("Portfolio", body));
+        let body = r#"<p class="empty-state">No portfolio data. Import via <code>ghost-alpha portfolio import</code></p>"#;
+        return Html(shell("/portfolio", "Portfolio Overview", body));
     }
 
     // Aggregate by ticker: total shares, weighted cost basis
@@ -208,23 +129,22 @@ pub async fn portfolio_page(State(state): State<AppState>) -> Html<String> {
     };
 
     let body = format!(
-        r#"<h2>Portfolio Overview</h2>
-<div class="grid">
+        r#"<div class="grid">
   <div>
-    <h4>Positions</h4>
-    <table role="grid">
-      <thead><tr><th>Ticker</th><th>Shares</th><th>Avg Cost</th><th>Cost Basis</th><th>Weight</th></tr></thead>
+    <h2>Positions</h2>
+    <table><caption class="sr-only">Portfolio positions: shares, cost in USD, weight in percent</caption>
+      <thead><tr><th scope="col">Ticker</th><th scope="col">Shares</th><th scope="col">Avg Cost</th><th scope="col">Cost Basis</th><th scope="col">Weight</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
   </div>
   <div>
-    <h4>Allocation</h4>
+    <h2>Allocation</h2>
     <div class="chart-container">{donut}</div>
     <p><strong>HHI:</strong> {hhi_display} &mdash; {hhi_label}</p>
   </div>
 </div>"#
     );
-    Html(dashboard_layout("Portfolio", &body))
+    Html(shell("/portfolio", "Portfolio Overview", &body))
 }
 
 // ─── 2. Correlation Matrix ──────────────────────────────────────────────────
@@ -237,9 +157,8 @@ pub async fn correlation_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or(None);
 
     let Some((snap_date, tickers, matrix, window)) = snapshot else {
-        let body = r#"<h2>Correlation Matrix</h2>
-<p class="empty-state">No correlation data. Run <code>ghost-alpha correlate</code> to generate.</p>"#;
-        return Html(dashboard_layout("Correlation", body));
+        let body = r#"<p class="empty-state">No correlation data. Run <code>ghost-alpha correlate</code> to generate.</p>"#;
+        return Html(shell("/correlation", "Correlation Matrix", body));
     };
 
     let ticker_refs: Vec<&str> = tickers.iter().map(|s| s.as_str()).collect();
@@ -273,8 +192,8 @@ pub async fn correlation_page(State(state): State<AppState>) -> Html<String> {
         "<p class=\"empty-state\">No pairs with correlation &gt; 0.80</p>".to_string()
     } else {
         format!(
-            r#"<table role="grid">
-  <thead><tr><th>Ticker A</th><th>Ticker B</th><th>Correlation</th></tr></thead>
+            r#"<table><caption class="sr-only">Highly correlated ticker pairs (correlation above 0.80)</caption>
+  <thead><tr><th scope="col">Ticker A</th><th scope="col">Ticker B</th><th scope="col">Correlation</th></tr></thead>
   <tbody>{pair_rows}</tbody>
 </table>"#
         )
@@ -282,13 +201,12 @@ pub async fn correlation_page(State(state): State<AppState>) -> Html<String> {
 
     let escaped_date = html_escape(&snap_date);
     let body = format!(
-        r#"<h2>Correlation Matrix</h2>
-<p>Snapshot: {escaped_date} &mdash; Window: {window} days</p>
+        r#"<p>Snapshot: {escaped_date} &mdash; Window: {window} days</p>
 <div class="chart-container">{heatmap}</div>
-<h4>Highly Correlated Pairs (&gt; 0.80)</h4>
+<h2>Highly Correlated Pairs (&gt; 0.80)</h2>
 {pair_table}"#
     );
-    Html(dashboard_layout("Correlation", &body))
+    Html(shell("/correlation", "Correlation Matrix", &body))
 }
 
 // ─── 3. Valuation Dashboard ────────────────────────────────────────────────
@@ -300,9 +218,8 @@ pub async fn valuation_page(
     let ticker = match params.ticker {
         Some(t) if !t.is_empty() => t,
         _ => {
-            let body = r#"<h2>Valuation Dashboard</h2>
-<p class="empty-state">No valuation data available. Select a ticker: <code>/valuation?ticker=AAPL</code></p>"#;
-            return Html(dashboard_layout("Valuation", body));
+            let body = r#"<p class="empty-state">No valuation data available. Select a ticker: <code>/valuation?ticker=AAPL</code></p>"#;
+            return Html(shell("/valuation", "Valuation Dashboard", body));
         }
     };
 
@@ -328,7 +245,7 @@ pub async fn valuation_page(
             r#"<h2>Valuation &mdash; {escaped_ticker}</h2>
 <p class="empty-state">No valuation data available for {escaped_ticker}.</p>"#
         );
-        return Html(dashboard_layout("Valuation", &body));
+        return Html(shell("/valuation", "Valuation", &body));
     }
 
     // Build metrics table
@@ -358,17 +275,17 @@ pub async fn valuation_page(
 
     let body = format!(
         r#"<h2>Valuation &mdash; {escaped_ticker}</h2>
-<h4>P/E Trend</h4>
+<h2>P/E Trend</h2>
 <div class="chart-container">{sparkline}</div>
-<h4>Fundamental History</h4>
+<h2>Fundamental History</h2>
 <div style="overflow-x: auto;">
-<table role="grid">
-  <thead><tr><th>Period</th><th>Type</th><th>P/E</th><th>P/B</th><th>EV/EBITDA</th><th>Gross %</th><th>Op %</th><th>Net %</th></tr></thead>
+<table><caption class="sr-only">Valuation ratios and margins by period</caption>
+  <thead><tr><th scope="col">Period</th><th scope="col">Type</th><th scope="col">P/E</th><th scope="col">P/B</th><th scope="col">EV/EBITDA</th><th scope="col">Gross %</th><th scope="col">Op %</th><th scope="col">Net %</th></tr></thead>
   <tbody>{metric_rows}</tbody>
 </table>
 </div>"#
     );
-    Html(dashboard_layout("Valuation", &body))
+    Html(shell("/valuation", "Valuation", &body))
 }
 
 // ─── 4. Tax Overview ────────────────────────────────────────────────────────
@@ -381,9 +298,8 @@ pub async fn tax_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     if lots.is_empty() {
-        let body = r#"<h2>Tax Overview</h2>
-<p class="empty-state">No tax lots imported.</p>"#;
-        return Html(dashboard_layout("Tax", body));
+        let body = r#"<p class="empty-state">No tax lots imported.</p>"#;
+        return Html(shell("/tax", "Tax Overview", body));
     }
 
     // Build detail table
@@ -409,24 +325,23 @@ pub async fn tax_page(State(state): State<AppState>) -> Html<String> {
     let total_lots = lots.len();
 
     let body = format!(
-        r#"<h2>Tax Overview</h2>
-<h4>Summary</h4>
-<table role="grid">
-  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+        r#"<h2>Summary</h2>
+<table><caption class="sr-only">Tax summary metrics</caption>
+  <thead><tr><th scope="col">Metric</th><th scope="col">Value</th></tr></thead>
   <tbody>
     <tr><td>Total Lots</td><td>{total_lots}</td></tr>
     <tr><td>Total Cost Basis</td><td>${total_cost:.2}</td></tr>
   </tbody>
 </table>
-<h4>Tax Lot Detail</h4>
+<h2>Tax Lot Detail</h2>
 <div style="overflow-x: auto;">
-<table role="grid">
-  <thead><tr><th>Lot ID</th><th>Ticker</th><th>Shares</th><th>Cost/Share</th><th>Total Cost</th><th>Acquired</th><th>Type</th></tr></thead>
+<table><caption class="sr-only">Tax lots with cost basis in USD and holding type</caption>
+  <thead><tr><th scope="col">Lot ID</th><th scope="col">Ticker</th><th scope="col">Shares</th><th scope="col">Cost/Share</th><th scope="col">Total Cost</th><th scope="col">Acquired</th><th scope="col">Type</th></tr></thead>
   <tbody>{detail_rows}</tbody>
 </table>
 </div>"#
     );
-    Html(dashboard_layout("Tax", &body))
+    Html(shell("/tax", "Tax Overview", &body))
 }
 
 // ─── 5. Optimization ───────────────────────────────────────────────────────
@@ -487,7 +402,7 @@ pub async fn optimize_page(State(state): State<AppState>) -> Html<String> {
         ];
         let svg = frontier_svg(&demo_points, None, 600, 400);
         format!(
-            r#"<h4>Efficient Frontier</h4>
+            r#"<h2>Efficient Frontier</h2>
 <div class="chart-container">{svg}</div>"#
         )
     } else {
@@ -496,15 +411,14 @@ pub async fn optimize_page(State(state): State<AppState>) -> Html<String> {
     };
 
     let body = format!(
-        r#"<h2>Portfolio Optimization</h2>
-{frontier_html}
-<h4>Model Portfolios</h4>
-<table role="grid">
-  <thead><tr><th>Name</th><th>Description</th><th>Weights</th></tr></thead>
+        r#"{frontier_html}
+<h2>Model Portfolios</h2>
+<table><caption class="sr-only">Optimization profiles and their asset weights</caption>
+  <thead><tr><th scope="col">Name</th><th scope="col">Description</th><th scope="col">Weights</th></tr></thead>
   <tbody>{model_table}</tbody>
 </table>"#
     );
-    Html(dashboard_layout("Optimize", &body))
+    Html(shell("/optimize", "Portfolio Optimization", &body))
 }
 
 // ─── 6. ETF Comparison ─────────────────────────────────────────────────────
@@ -517,9 +431,8 @@ pub async fn etf_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     if snapshots.is_empty() {
-        let body = r#"<h2>ETF Comparison</h2>
-<p class="empty-state">No ETF data. Run <code>ghost-alpha etf-sync</code> to populate.</p>"#;
-        return Html(dashboard_layout("ETF", body));
+        let body = r#"<p class="empty-state">No ETF data. Run <code>ghost-alpha etf-sync</code> to populate.</p>"#;
+        return Html(shell("/etf", "ETF Comparison", body));
     }
 
     let mut etf_rows = String::new();
@@ -550,15 +463,14 @@ pub async fn etf_page(State(state): State<AppState>) -> Html<String> {
     }
 
     let body = format!(
-        r#"<h2>ETF Comparison</h2>
-<div style="overflow-x: auto;">
-<table role="grid">
-  <thead><tr><th>Ticker</th><th>Name</th><th>Category</th><th>Expense Ratio</th><th>AUM</th><th>Top Holdings</th></tr></thead>
+        r#"<div style="overflow-x: auto;">
+<table><caption class="sr-only">ETF comparison: expense ratio, assets under management and top holdings</caption>
+  <thead><tr><th scope="col">Ticker</th><th scope="col">Name</th><th scope="col">Category</th><th scope="col">Expense Ratio</th><th scope="col">AUM</th><th scope="col">Top Holdings</th></tr></thead>
   <tbody>{etf_rows}</tbody>
 </table>
 </div>"#
     );
-    Html(dashboard_layout("ETF", &body))
+    Html(shell("/etf", "ETF Comparison", &body))
 }
 
 // ─── 7. Selling Programme ──────────────────────────────────────────────────
@@ -599,9 +511,8 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
     }
 
     if all_programmes.is_empty() {
-        let body = r#"<h2>Selling Programme</h2>
-<p class="empty-state">No selling programme configured.</p>"#;
-        return Html(dashboard_layout("Selling", body));
+        let body = r#"<p class="empty-state">No selling programme configured.</p>"#;
+        return Html(shell("/selling", "Selling Programme", body));
     }
 
     let mut sections = String::new();
@@ -638,11 +549,11 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
 
         sections.push_str(&format!(
             r#"<article>
-<h4>{ticker} &mdash; Programme #{prog_id}</h4>
+<h2>{ticker} &mdash; Programme #{prog_id}</h2>
 <p>Progress: {progress:.1}% &mdash; Remaining: {remaining:.0} shares</p>
 <div class="chart-container">{chart}</div>
-<table role="grid">
-  <thead><tr><th>Period</th><th>Target</th><th>Executed</th><th>Remaining</th></tr></thead>
+<table><caption class="sr-only">Selling programme schedule: target, executed and remaining shares</caption>
+  <thead><tr><th scope="col">Period</th><th scope="col">Target</th><th scope="col">Executed</th><th scope="col">Remaining</th></tr></thead>
   <tbody>{schedule_rows}</tbody>
 </table>
 </article>"#,
@@ -650,11 +561,7 @@ pub async fn selling_page(State(state): State<AppState>) -> Html<String> {
         ));
     }
 
-    let body = format!(
-        r#"<h2>Selling Programme</h2>
-{sections}"#
-    );
-    Html(dashboard_layout("Selling", &body))
+    Html(shell("/selling", "Selling Programme", &sections))
 }
 
 // ─── 8. Decision Log ───────────────────────────────────────────────────────
@@ -667,9 +574,8 @@ pub async fn decisions_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     if decisions.is_empty() {
-        let body = r#"<h2>Decision Log</h2>
-<p class="empty-state">No decisions logged.</p>"#;
-        return Html(dashboard_layout("Decisions", body));
+        let body = r#"<p class="empty-state">No decisions logged.</p>"#;
+        return Html(shell("/decisions", "Decision Log", body));
     }
 
     let mut rows = String::new();
@@ -703,15 +609,14 @@ pub async fn decisions_page(State(state): State<AppState>) -> Html<String> {
     }
 
     let body = format!(
-        r#"<h2>Decision Log</h2>
-<div style="overflow-x: auto;">
-<table role="grid">
-  <thead><tr><th>Date</th><th>Type</th><th>Ticker</th><th>Shares</th><th>Price</th><th>Rationale</th><th>Advisor</th></tr></thead>
+        r#"<div style="overflow-x: auto;">
+<table><caption class="sr-only">Logged trade decisions with price in USD and rationale</caption>
+  <thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col">Ticker</th><th scope="col">Shares</th><th scope="col">Price</th><th scope="col">Rationale</th><th scope="col">Advisor</th></tr></thead>
   <tbody>{rows}</tbody>
 </table>
 </div>"#
     );
-    Html(dashboard_layout("Decisions", &body))
+    Html(shell("/decisions", "Decision Log", &body))
 }
 
 // ─── 9. Fundamentals ───────────────────────────────────────────────────────
@@ -731,9 +636,8 @@ pub async fn fundamentals_page(State(state): State<AppState>) -> Html<String> {
         .unwrap_or_default();
 
     if metrics.is_empty() && sectors.is_empty() {
-        let body = r#"<h2>Fundamentals</h2>
-<p class="empty-state">No fundamental data available.</p>"#;
-        return Html(dashboard_layout("Fundamentals", body));
+        let body = r#"<p class="empty-state">No fundamental data available.</p>"#;
+        return Html(shell("/fundamentals", "Fundamentals", body));
     }
 
     // Metrics table
@@ -760,10 +664,10 @@ pub async fn fundamentals_page(State(state): State<AppState>) -> Html<String> {
         String::new()
     } else {
         format!(
-            r#"<h4>Fundamental Metrics</h4>
+            r#"<h2>Fundamental Metrics</h2>
 <div style="overflow-x: auto;">
-<table role="grid">
-  <thead><tr><th>Ticker</th><th>Date</th><th>P/E</th><th>P/B</th><th>EPS Gr%</th><th>Rev Gr%</th><th>Gross %</th><th>Net %</th><th>ROE %</th><th>Score</th></tr></thead>
+<table><caption class="sr-only">Fundamental ratios per ticker, growth and margins in percent</caption>
+  <thead><tr><th scope="col">Ticker</th><th scope="col">Date</th><th scope="col">P/E</th><th scope="col">P/B</th><th scope="col">EPS Gr%</th><th scope="col">Rev Gr%</th><th scope="col">Gross %</th><th scope="col">Net %</th><th scope="col">ROE %</th><th scope="col">Score</th></tr></thead>
   <tbody>{metric_rows}</tbody>
 </table>
 </div>"#
@@ -787,20 +691,19 @@ pub async fn fundamentals_page(State(state): State<AppState>) -> Html<String> {
         String::new()
     } else {
         format!(
-            r#"<h4>Sector P/E Benchmarks</h4>
-<table role="grid">
-  <thead><tr><th>Sector</th><th>Date</th><th>Median P/E</th><th>Median P/S</th><th>Stocks</th></tr></thead>
+            r#"<h2>Sector P/E Benchmarks</h2>
+<table><caption class="sr-only">Median valuation multiples by sector</caption>
+  <thead><tr><th scope="col">Sector</th><th scope="col">Date</th><th scope="col">Median P/E</th><th scope="col">Median P/S</th><th scope="col">Stocks</th></tr></thead>
   <tbody>{sector_rows}</tbody>
 </table>"#
         )
     };
 
     let body = format!(
-        r#"<h2>Fundamentals</h2>
-{metrics_section}
+        r#"{metrics_section}
 {sector_section}"#
     );
-    Html(dashboard_layout("Fundamentals", &body))
+    Html(shell("/fundamentals", "Fundamentals", &body))
 }
 
 // ─── 10. Concentration Decay ─────────────────────────────────────────────────
@@ -869,8 +772,8 @@ pub async fn concentration_decay_page(
   <div><strong>Vol reduction:</strong> {:.1}%</div>
 </div>
 <div class="chart-container">{chart}</div>
-<details><summary>Quarterly breakdown</summary><table role="grid">
-<thead><tr><th>Quarter</th><th>Weight</th><th>Est. Vol</th><th>Shares Left</th></tr></thead>
+<details><summary>Quarterly breakdown</summary><table><caption class="sr-only">Quarterly breakdown of weight, estimated volatility and shares left</caption>
+<thead><tr><th scope="col">Quarter</th><th scope="col">Weight</th><th scope="col">Est. Vol</th><th scope="col">Shares Left</th></tr></thead>
 <tbody>{rows}</tbody></table></details>"#,
         starting_weight * 100.0,
         first_vol,
@@ -887,7 +790,7 @@ pub async fn concentration_decay_page(
             .collect::<String>(),
     );
 
-    Html(dashboard_layout("Concentration Decay", &body))
+    Html(shell("/concentration-decay", "Concentration Decay", &body))
 }
 
 // ─── 11. Allocation ──────────────────────────────────────────────────────────
@@ -939,8 +842,8 @@ pub async fn allocation_page(Query(params): Query<AllocationParams>) -> Html<Str
         r#"<h2>Target Allocation — {profile_name}</h2>
 <p>{desc}</p>
 <p><strong>Brokerage:</strong> {brok} | <strong>Portfolio Value:</strong> ${pv:.0} | <strong>Blended ER:</strong> {er:.4}%</p>
-<table role="grid">
-<thead><tr><th>Asset Class</th><th>Ticker</th><th>Fund</th><th>ER</th><th>Amount</th><th>TLH Partner</th><th>Transferable</th></tr></thead>
+<table><caption class="sr-only">Target allocation by asset class and fund, amounts in USD</caption>
+<thead><tr><th scope="col">Asset Class</th><th scope="col">Ticker</th><th scope="col">Fund</th><th scope="col">ER</th><th scope="col">Amount</th><th scope="col">TLH Partner</th><th scope="col">Transferable</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
 <p style="color:#888;font-size:0.85em">Try: <code>/allocation?brokerage=schwab&amp;profile=aggressive&amp;portfolio_value=1000000</code></p>"#,
@@ -950,7 +853,7 @@ pub async fn allocation_page(Query(params): Query<AllocationParams>) -> Html<Str
         er = blended_er * 100.0,
     );
 
-    Html(dashboard_layout("Allocation", &body))
+    Html(shell("/allocation", "Target Allocation", &body))
 }
 
 // ─── 12. Geopolitical Risk ──────────────────────────────────────────────────
@@ -1003,8 +906,7 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
     };
 
     let body = format!(
-        r#"<h2>Geopolitical Risk Assessment</h2>
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+        r#"<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
   <div><strong>Oil (Brent):</strong> ${:.0}/bbl</div>
   <div><strong>VIX:</strong> {:.1}</div>
   <div><strong>Gold 3m:</strong> {:.1}%</div>
@@ -1018,9 +920,9 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
 </div>
 <p><strong>Composite Score:</strong> <span style="font-size:1.5em;color:{level_color}">{:.1}/10</span>
    — <strong style="color:{level_color}">{}</strong></p>
-<h3>Suggested Allocation Adjustments</h3>
-<table role="grid">
-<thead><tr><th>Sector</th><th>Adjustment</th></tr></thead>
+<h2>Suggested Allocation Adjustments</h2>
+<table><caption class="sr-only">Suggested allocation adjustments by sector</caption>
+<thead><tr><th scope="col">Sector</th><th scope="col">Adjustment</th></tr></thead>
 <tbody>{adj_rows}</tbody>
 </table>
 <p style="color:#888;font-size:0.85em">Try: <code>/geo-risk?oil=130&amp;vix=32&amp;gold_3m=0.15&amp;dxy_3m=-0.05</code></p>"#,
@@ -1036,7 +938,7 @@ pub async fn geo_risk_page(Query(params): Query<GeoRiskParams>) -> Html<String> 
         score.level,
     );
 
-    Html(dashboard_layout("Geo Risk", &body))
+    Html(shell("/geo-risk", "Geopolitical Risk Assessment", &body))
 }
 
 // ─── Rotation Page ──────────────────────────────────────────────────────────
@@ -1211,17 +1113,16 @@ pub async fn rotation_page() -> Html<String> {
 
     let body = format!(
         r#"
-<h2>Capital Rotation Analysis</h2>
 <p>Regime: <strong>Sideways</strong> | Target weight: 12.5% per position</p>
 
-<h3>Sell Pressure Scores</h3>
-<table>
-<thead><tr><th>Ticker</th><th>SPS</th><th>Action</th><th>Trend</th><th>Momentum</th><th>Drawdown</th><th>RS Fade</th><th>Time Decay</th></tr></thead>
+<h2>Sell Pressure Scores</h2>
+<table><caption class="sr-only">Sell pressure scores per ticker with component breakdown</caption>
+<thead><tr><th scope="col">Ticker</th><th scope="col">SPS</th><th scope="col">Action</th><th scope="col">Trend</th><th scope="col">Momentum</th><th scope="col">Drawdown</th><th scope="col">RS Fade</th><th scope="col">Time Decay</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
 
-<h3>Cash Deployment</h3>
-<table>
+<h2>Cash Deployment</h2>
+<table><caption class="sr-only">Cash deployment scores by component</caption>
 <tr><td>CDS Score</td><td><strong>{:.1}</strong></td><td>{:?}</td></tr>
 <tr><td>Opportunity Richness</td><td>{:.0}</td><td></td></tr>
 <tr><td>Regime Score</td><td>{:.0}</td><td></td></tr>
@@ -1239,7 +1140,7 @@ pub async fn rotation_page() -> Html<String> {
         cds.drawdown_risk
     );
 
-    Html(dashboard_layout("Rotation", &body))
+    Html(shell("/rotation", "Capital Rotation Analysis", &body))
 }
 
 // ─── Sizing Page ────────────────────────────────────────────────────────────
@@ -1285,18 +1186,17 @@ pub async fn sizing_page() -> Html<String> {
 
     let body = format!(
         r#"
-<h2>Position Sizing</h2>
 <p>Portfolio: <strong>${:.0}</strong> | Method: VolatilityTarget (2x ATR) | Risk: 1% | Max: 15%</p>
 
-<table>
-<thead><tr><th>Ticker</th><th>Grade</th><th>Price</th><th>Stop</th><th>Shares</th><th>Amount</th><th>Risk $</th><th>% of Port</th></tr></thead>
+<table><caption class="sr-only">Recommended position sizes: shares, amount and risk in USD</caption>
+<thead><tr><th scope="col">Ticker</th><th scope="col">Grade</th><th scope="col">Price</th><th scope="col">Stop</th><th scope="col">Shares</th><th scope="col">Amount</th><th scope="col">Risk $</th><th scope="col">% of Port</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
 
 <p><em>* = position capped at max percentage. Grade multipliers: A+ = 1.5x, A = 1.0x, B = 0.7x. Regime: Sideways = 0.8x.</em></p>
 
-<h3>Sizing Methods</h3>
-<table>
+<h2>Sizing Methods</h2>
+<table><caption class="sr-only">Available sizing methods and how each works</caption>
 <tr><td><strong>VolatilityTarget</strong> (default)</td><td>Shares = RiskBudget / (ATR x StopMult). Smaller positions in volatile stocks.</td></tr>
 <tr><td><strong>EqualWeight</strong></td><td>Portfolio / N positions. Simple 1/N allocation.</td></tr>
 <tr><td><strong>FixedFractional</strong></td><td>Risk X% of portfolio per trade. Stop determines share count.</td></tr>
@@ -1306,7 +1206,7 @@ pub async fn sizing_page() -> Html<String> {
         portfolio
     );
 
-    Html(dashboard_layout("Position Sizing", &body))
+    Html(shell("/sizing", "Position Sizing", &body))
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -1354,42 +1254,6 @@ mod tests {
             .expect("body collect failed");
         let body = String::from_utf8_lossy(&bytes).to_string();
         (status, body)
-    }
-
-    // ── Layout tests ────────────────────────────────────────────────────────
-
-    #[test]
-    fn dashboard_layout_contains_nav_links() {
-        let html = dashboard_layout("Test", "<p>hello</p>");
-        assert!(html.contains("Ghost Alpha"));
-        assert!(html.contains(r#"<a href="/portfolio">Portfolio</a>"#));
-        assert!(html.contains(r#"<a href="/correlation">Correlation</a>"#));
-        assert!(html.contains(r#"<a href="/valuation">Valuation</a>"#));
-        assert!(html.contains(r#"<a href="/tax">Tax</a>"#));
-        assert!(html.contains(r#"<a href="/optimize">Optimize</a>"#));
-        assert!(html.contains(r#"<a href="/etf">ETF</a>"#));
-        assert!(html.contains(r#"<a href="/selling">Selling</a>"#));
-        assert!(html.contains(r#"<a href="/decisions">Decisions</a>"#));
-        assert!(html.contains(r#"<a href="/fundamentals">Fundamentals</a>"#));
-        assert!(html.contains(r#"<a href="/settings">Settings</a>"#));
-    }
-
-    #[test]
-    fn dashboard_layout_wraps_body() {
-        let html = dashboard_layout("My Page", "<p>content</p>");
-        assert!(html.contains("<title>Ghost Alpha — My Page</title>"));
-        assert!(html.contains("<p>content</p>"));
-        assert!(html.contains("</html>"));
-    }
-
-    #[test]
-    fn dashboard_layout_escapes_title() {
-        let html = dashboard_layout("</title><script>alert(1)</script>", "<p>x</p>");
-        assert!(
-            !html.contains("<script>alert(1)</script>"),
-            "title must be HTML-escaped to prevent XSS"
-        );
-        assert!(html.contains("&lt;script&gt;"));
     }
 
     // ── HTML escape tests ───────────────────────────────────────────────────
