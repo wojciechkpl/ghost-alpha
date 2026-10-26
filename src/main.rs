@@ -3965,9 +3965,24 @@ async fn run_serve(cfg: &AppConfig, bind: &str, port: u16) -> Result<()> {
         .await?
         .context("Failed to open database")?;
 
+    // Same resolution as `ghost-alpha edgar`; serve must start without it.
+    let config_ua = cfg.edgar.as_ref().and_then(|e| e.user_agent.as_deref());
+    let edgar = match ghost_alpha::cli::edgar::build_client(config_ua) {
+        Ok(client) => Some(Arc::new(client)),
+        Err(e) => {
+            tracing::warn!(
+                "EDGAR disabled for the dashboard ({e}); run `ghost-alpha setup --section edgar` \
+                 to enable ETF overlap"
+            );
+            None
+        }
+    };
+
     let state = AppState {
         repo: Arc::new(repo),
         config: Arc::new(cfg.clone()),
+        edgar,
+        etf_timeout: None,
     };
 
     let router = create_router(state);

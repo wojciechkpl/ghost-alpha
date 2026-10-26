@@ -51,6 +51,8 @@ Start the built-in dashboard with `ghost-alpha serve` — no external dependenci
 
 Features: htmx-powered live updates, color-coded severity/grade badges, watchlist management (add/remove), market regime indicator, API key masking, mobile-responsive via Pico CSS. The Analytics page includes composite score heatmaps, sentiment timelines, grade distribution charts, and RS momentum scatter plots.
 
+The **Concentration** page (`/portfolio/concentration`, Portfolio menu) shows how concentrated your imported lots are: weights at the latest close (cost basis where there are no prices, marked "at cost"), the top-1 limit check and effective number of positions. A lazily loaded panel then looks through the ETFs you hold, using SEC N-PORT filings, and ranks diversifier ETFs by your exposure to the concentrated stock after buying `$X` of each. It needs an EDGAR User-Agent (`ghost-alpha setup --section edgar`); without one the page works and the panel explains how to enable it. Query parameters: `symbol`, `limit`, `candidates`, `buy`.
+
 ---
 
 ## Table of Contents
@@ -938,6 +940,7 @@ src/
 │   ├── mod.rs                 Axum web server setup + router
 │   ├── routes.rs              Dashboard routes (htmx + pico.css)
 │   ├── dashboard_routes.rs    Portfolio, tax, selling, allocation, geo-risk pages
+│   ├── concentration.rs       Concentration page + N-PORT ETF overlap fragment
 │   ├── diversification_report.rs  Self-contained HTML diversification report
 │   ├── assets.rs              Embedded static file server (rust-embed)
 │   └── charts.rs              SVG generators: donut, frontier, heatmap, decay

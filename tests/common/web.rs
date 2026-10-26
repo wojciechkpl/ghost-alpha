@@ -36,6 +36,8 @@ pub fn app() -> Router {
     create_router(AppState {
         repo: Arc::new(repo),
         config: Arc::new(config),
+        edgar: None,
+        etf_timeout: None,
     })
 }
 
@@ -400,7 +402,63 @@ pub fn app_with(seed: impl FnOnce(&SqliteRepository)) -> Router {
     create_router(AppState {
         repo: Arc::new(repo),
         config: Arc::new(config),
+        edgar: None,
+        etf_timeout: None,
     })
+}
+
+/// Router with an optional shared EDGAR client (`AppState.edgar`).
+pub fn app_with_edgar(
+    seed: impl FnOnce(&SqliteRepository),
+    edgar: Option<Arc<ghost_alpha::data::edgar::EdgarClient>>,
+) -> Router {
+    app_with_edgar_timeout(seed, edgar, None)
+}
+
+/// Like [`app_with_edgar`] with a per-ETF evaluation timeout override
+/// (`AppState.etf_timeout`; `None` = the production default).
+pub fn app_with_edgar_timeout(
+    seed: impl FnOnce(&SqliteRepository),
+    edgar: Option<Arc<ghost_alpha::data::edgar::EdgarClient>>,
+    etf_timeout: Option<std::time::Duration>,
+) -> Router {
+    let repo = SqliteRepository::open_in_memory().expect("in-memory db");
+    seed(&repo);
+    let config: AppConfig = toml::from_str("").unwrap();
+    create_router(AppState {
+        repo: Arc::new(repo),
+        config: Arc::new(config),
+        edgar,
+        etf_timeout,
+    })
+}
+
+/// Insert one open tax lot (remaining == shares).
+pub fn insert_lot(repo: &SqliteRepository, id: &str, ticker: &str, shares: f64, cost: f64) {
+    let conn = repo.connection().unwrap();
+    conn.execute(
+        "INSERT INTO tax_lots (id, ticker, shares, cost_basis_per_share, acquired_date, \
+         acquisition_type, remaining_shares) VALUES (?1, ?2, ?3, ?4, '2022-01-03', 'BUY', ?3)",
+        rusqlite::params![id, ticker, shares, cost],
+    )
+    .unwrap();
+}
+
+/// Insert a daily candle (close = adj_close = `close`); creates the stock row first.
+pub fn insert_close(repo: &SqliteRepository, ticker: &str, date: &str, close: f64) {
+    use ghost_alpha::data::models::{Candle, Stock};
+    repo.upsert_stock(&Stock {
+        ticker: ticker.to_string(),
+        name: format!("{ticker} test"),
+        sector: "Test".to_string(),
+        industry: "Test".to_string(),
+    })
+    .unwrap();
+    repo.upsert_candles(
+        ticker,
+        &[Candle::new(date, close, close, close, close, 1_000)],
+    )
+    .unwrap();
 }
 
 pub fn seeded_app() -> Router {

@@ -1114,7 +1114,10 @@ impl EdgarClient {
         url: &str,
         key: &str,
         parse: fn(&str) -> Result<T, EdgarError>,
-    ) -> Result<T, EdgarError> {
+    ) -> Result<T, EdgarError>
+    where
+        T: Send + 'static,
+    {
         self.get_cached_with(url, key, parse, false).await
     }
 
@@ -1128,18 +1131,34 @@ impl EdgarClient {
         key: &str,
         parse: fn(&str) -> Result<T, EdgarError>,
         immutable: bool,
-    ) -> Result<T, EdgarError> {
+    ) -> Result<T, EdgarError>
+    where
+        T: Send + 'static,
+    {
         let path = self.cfg.cache_dir.join(key);
-        let cached = std::fs::read_to_string(&path).ok();
-        if immutable || self.is_fresh(&path) {
-            if let Some(body) = &cached {
-                match parse(body) {
-                    Ok(v) => return Ok(v),
-                    Err(e) => {
-                        tracing::warn!(path = %path.display(), error = %e, "Ignoring corrupt EDGAR cache entry")
+        let ttl_hours = self.cfg.cache_ttl_hours;
+        // Disk reads and parsing of (possibly multi-MB) documents run off the async runtime.
+        let (cached, hit) = {
+            let path = path.clone();
+            blocking(move || {
+                let cached = std::fs::read_to_string(&path).ok();
+                let mut hit = None;
+                if immutable || cache_is_fresh(&path, ttl_hours) {
+                    if let Some(body) = &cached {
+                        match parse(body) {
+                            Ok(v) => hit = Some(v),
+                            Err(e) => {
+                                tracing::warn!(path = %path.display(), error = %e, "Ignoring corrupt EDGAR cache entry")
+                            }
+                        }
                     }
                 }
-            }
+                (cached, hit)
+            })
+            .await?
+        };
+        if let Some(v) = hit {
+            return Ok(v);
         }
         let timeout = if immutable {
             DOCUMENT_TIMEOUT
@@ -1148,12 +1167,20 @@ impl EdgarClient {
         };
         match self.fetch(url, timeout).await {
             Ok(body) => {
-                let parsed = parse(&body)?;
-                self.write_cache(&path, &body);
-                Ok(parsed)
+                let cache_dir = self.cfg.cache_dir.clone();
+                blocking(move || {
+                    let parsed = parse(&body)?;
+                    write_cache_file(&cache_dir, &path, &body);
+                    Ok(parsed)
+                })
+                .await?
             }
             Err(e) if is_transient(&e) => {
-                if let Some(v) = cached.as_deref().and_then(|b| parse(b).ok()) {
+                let stale = match cached {
+                    Some(body) => blocking(move || parse(&body).ok()).await?,
+                    None => None,
+                };
+                if let Some(v) = stale {
                     tracing::warn!(%url, error = %e, "EDGAR unavailable, using stale cached copy");
                     Ok(v)
                 } else {
@@ -1161,39 +1188,6 @@ impl EdgarClient {
                 }
             }
             Err(e) => Err(e),
-        }
-    }
-
-    fn is_fresh(&self, path: &Path) -> bool {
-        let ttl = Duration::from_secs(self.cfg.cache_ttl_hours.saturating_mul(3600));
-        std::fs::metadata(path)
-            .and_then(|m| m.modified())
-            .ok()
-            // An mtime up to 5 minutes in the future (clock skew, coarse timestamps)
-            // counts as age zero; further ahead is untrustworthy, so treat as stale.
-            .and_then(|t| match t.elapsed() {
-                Ok(age) => Some(age),
-                Err(e) if e.duration() <= FUTURE_MTIME_TOLERANCE => Some(Duration::ZERO),
-                Err(_) => None,
-            })
-            .is_some_and(|age| age < ttl)
-    }
-
-    /// Best effort: a failing cache must not fail the request. Each write goes
-    /// through its own temp file in the target directory, then an atomic rename.
-    fn write_cache(&self, path: &Path, body: &str) {
-        use std::io::Write;
-        let result = (|| -> std::io::Result<()> {
-            let dir = path.parent().unwrap_or(&self.cfg.cache_dir);
-            std::fs::create_dir_all(dir)?;
-            let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
-            tmp.write_all(body.as_bytes())?;
-            // On failure the temp file is removed when the error is dropped.
-            tmp.persist(path).map_err(|e| e.error)?;
-            Ok(())
-        })();
-        if let Err(e) = result {
-            tracing::warn!(path = %path.display(), error = %e, "Failed to write EDGAR cache entry");
         }
     }
 
@@ -1267,6 +1261,49 @@ impl EdgarClient {
         let base = self.cfg.retry_base_delay_ms.saturating_mul(factor);
         let jitter = rand::thread_rng().gen_range(0..=base / 4);
         Duration::from_millis(base.saturating_add(jitter)).min(MAX_BACKOFF)
+    }
+}
+
+/// Run blocking file or parsing work on the blocking pool.
+async fn blocking<R: Send + 'static>(
+    f: impl FnOnce() -> R + Send + 'static,
+) -> Result<R, EdgarError> {
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| EdgarError::Parse(format!("background task failed: {e}")))
+}
+
+/// True when the cache file is younger than `ttl_hours`.
+fn cache_is_fresh(path: &Path, ttl_hours: u64) -> bool {
+    let ttl = Duration::from_secs(ttl_hours.saturating_mul(3600));
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        // An mtime up to 5 minutes in the future (clock skew, coarse timestamps)
+        // counts as age zero; further ahead is untrustworthy, so treat as stale.
+        .and_then(|t| match t.elapsed() {
+            Ok(age) => Some(age),
+            Err(e) if e.duration() <= FUTURE_MTIME_TOLERANCE => Some(Duration::ZERO),
+            Err(_) => None,
+        })
+        .is_some_and(|age| age < ttl)
+}
+
+/// Best effort: a failing cache must not fail the request. Each write goes
+/// through its own temp file in the target directory, then an atomic rename.
+fn write_cache_file(cache_dir: &Path, path: &Path, body: &str) {
+    use std::io::Write;
+    let result = (|| -> std::io::Result<()> {
+        let dir = path.parent().unwrap_or(cache_dir);
+        std::fs::create_dir_all(dir)?;
+        let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+        tmp.write_all(body.as_bytes())?;
+        // On failure the temp file is removed when the error is dropped.
+        tmp.persist(path).map_err(|e| e.error)?;
+        Ok(())
+    })();
+    if let Err(e) = result {
+        tracing::warn!(path = %path.display(), error = %e, "Failed to write EDGAR cache entry");
     }
 }
 

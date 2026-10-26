@@ -4,6 +4,11 @@ All notable changes to GhostAlpha are documented in this file.
 
 ## [Unreleased] — v2.0
 
+### Concentration hub: ETF overlap
+- **New:** `/portfolio/concentration` (Portfolio menu): donut and positions table valued at the latest close (cost basis flagged "at cost" when a ticker has no candles), top-1 limit status in text, effective number of positions, and a lazily loaded ETF overlap panel (`/partials/etf-overlap`)
+- **New:** the panel looks through the funds you hold using SEC N-PORT filings and ranks candidate ETFs (`candidates`, default `VTI,VXUS,QQQ,SCHD`) by the concentrated stock's look-through weight after buying `buy` dollars of each. One ETF failing shows a status row, and a failed, timed-out or skipped held fund (the 15 largest are evaluated; each ETF is bounded to 20 s) adds a "partial" badge. Ticker maps load once per request, and EDGAR cache reads and parsing no longer block the async runtime. Positions without a close and without a positive cost are shown as "no price" and excluded; closes more than 7 days older than the newest are marked stale; `buy` is capped at 1e12
+- **Changed:** `AppState` carries a shared EDGAR client built by `ghost-alpha serve` with the same User-Agent, cache and base-URL resolution as `ghost-alpha edgar`; without a User-Agent the dashboard still starts and the panel shows the setup hint. `cli::edgar::build_client` is now public
+
 ### Guided setup wizard
 - **New:** `ghost-alpha setup` reads the existing `config.toml` and `.env`, pre-fills every prompt from them, and edits both in place: comments, ordering and unknown keys survive, and unrelated `.env` lines are kept. Secrets are asked with masked input and only ever go to `.env` (mode 0600)
 - **New:** nothing is written before a review that shows each file as new, changed (with a diff in which every `.env` value is masked) or unchanged; changed files are backed up to `*.bak` and written atomically. `--yes` skips only that final confirmation

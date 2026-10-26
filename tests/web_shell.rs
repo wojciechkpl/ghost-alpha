@@ -28,6 +28,7 @@ const EXPECTED: &[(&str, &[&str])] = &[
         "Portfolio",
         &[
             "/portfolio",
+            "/portfolio/concentration",
             "/allocation",
             "/concentration-decay",
             "/tax",

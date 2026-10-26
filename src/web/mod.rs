@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod charts;
+pub mod concentration;
 pub mod dashboard_routes;
 pub mod diversification_report;
 pub mod freshness;
@@ -16,6 +17,7 @@ use axum::{extract::Request, Router};
 use tower_http::compression::CompressionLayer;
 
 use crate::config::AppConfig;
+use crate::data::edgar::EdgarClient;
 use crate::storage::db::SqliteRepository;
 
 /// Shared state injected into every route handler.
@@ -23,6 +25,11 @@ use crate::storage::db::SqliteRepository;
 pub struct AppState {
     pub repo: Arc<SqliteRepository>,
     pub config: Arc<AppConfig>,
+    /// Shared SEC EDGAR client; `None` when no User-Agent is configured.
+    pub edgar: Option<Arc<EdgarClient>>,
+    /// Per-ETF evaluation timeout for the concentration overlap; `None` means
+    /// [`concentration::ETF_TIMEOUT`].
+    pub etf_timeout: Option<std::time::Duration>,
 }
 
 /// Content-Security-Policy sent on every response. All scripts and styles are
@@ -110,6 +117,10 @@ pub fn create_router(state: AppState) -> Router {
             axum::routing::get(dashboard_routes::rotation_page),
         )
         .route("/sizing", axum::routing::get(dashboard_routes::sizing_page))
+        .route(
+            "/portfolio/concentration",
+            axum::routing::get(concentration::concentration_page),
+        )
         // htmx partial endpoints (fragments only)
         .route(
             "/partials/screen-table",
@@ -155,6 +166,10 @@ pub fn create_router(state: AppState) -> Router {
             "/partials/macro-gauges",
             axum::routing::get(routes::macro_gauges_partial),
         )
+        .route(
+            "/partials/etf-overlap",
+            axum::routing::get(concentration::etf_overlap_partial),
+        )
         // Watchlist mutations (return fragments)
         .route("/watchlist/add", axum::routing::post(routes::watchlist_add))
         .route(
@@ -194,6 +209,8 @@ mod tests {
         AppState {
             repo: Arc::new(repo),
             config: Arc::new(config),
+            edgar: None,
+            etf_timeout: None,
         }
     }
 

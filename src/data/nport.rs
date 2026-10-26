@@ -27,7 +27,7 @@ use serde_json::Value;
 
 use crate::data::edgar::{
     cache_namespace, cik_from_value, normalize_ticker, parse_date, parse_err, suggest_tickers, Cik,
-    EdgarClient, EdgarError,
+    EdgarClient, EdgarError, TickerMap,
 };
 
 const FUND_TICKERS_CACHE_KEY: &str = "company_tickers_mf.json";
@@ -713,6 +713,32 @@ pub fn same_period_amendment(
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
+/// Resolve `ticker` against already loaded maps: its [`FundId`], else
+/// [`EdgarError::NotNportFiler`] for a known non-fund SEC company, else
+/// [`EdgarError::UnknownFund`] with suggestions.
+pub fn resolve_fund_id(
+    funds: &FundTickerMap,
+    companies: &TickerMap,
+    ticker: &str,
+) -> Result<FundId, EdgarError> {
+    if let Some(id) = funds.get(ticker) {
+        return Ok(id.clone());
+    }
+    if companies.get(ticker).is_some() {
+        return Err(EdgarError::NotNportFiler {
+            ticker: ticker.to_string(),
+        });
+    }
+    let mut suggestions = funds.suggest(ticker);
+    if suggestions.is_empty() {
+        suggestions = companies.suggest(ticker);
+    }
+    Err(EdgarError::UnknownFund {
+        ticker: ticker.to_string(),
+        suggestions,
+    })
+}
+
 impl EdgarClient {
     /// Series and class IDs for a fund ticker (case-insensitive).
     ///
@@ -720,31 +746,29 @@ impl EdgarClient {
     /// trust such as SPY) is [`EdgarError::NotNportFiler`]; a ticker unknown to
     /// both lists is [`EdgarError::UnknownFund`] with suggestions.
     pub async fn fund_id(&self, ticker: &str) -> Result<FundId, EdgarError> {
+        let funds = self.fund_tickers().await?;
+        if let Some(id) = funds.get(ticker) {
+            return Ok(id.clone());
+        }
+        let companies = self.company_tickers().await?;
+        resolve_fund_id(&funds, &companies, ticker)
+    }
+
+    /// The cached fund ticker map (`company_tickers_mf.json`). Load it once and
+    /// share it when resolving many tickers.
+    pub async fn fund_tickers(&self) -> Result<FundTickerMap, EdgarError> {
         let url = format!("{}/files/company_tickers_mf.json", self.www_base);
         let key = format!(
             "{}/{FUND_TICKERS_CACHE_KEY}",
             cache_namespace(&self.www_base)
         );
-        let funds = self
-            .get_cached_with(&url, &key, parse_fund_tickers, false)
-            .await?;
-        if let Some(id) = funds.get(ticker) {
-            return Ok(id.clone());
-        }
-        let companies = self.company_tickers().await?;
-        if companies.get(ticker).is_some() {
-            return Err(EdgarError::NotNportFiler {
-                ticker: ticker.to_string(),
-            });
-        }
-        let mut suggestions = funds.suggest(ticker);
-        if suggestions.is_empty() {
-            suggestions = companies.suggest(ticker);
-        }
-        Err(EdgarError::UnknownFund {
-            ticker: ticker.to_string(),
-            suggestions,
-        })
+        self.get_cached_with(&url, &key, parse_fund_tickers, false)
+            .await
+    }
+
+    /// The cached `company_tickers.json` map (ticker -> CIK and title).
+    pub async fn company_ticker_map(&self) -> Result<TickerMap, EdgarError> {
+        self.company_tickers().await
     }
 
     /// EDGAR's company title for `ticker` (e.g. `AMAZON COM INC`), `None` when
@@ -785,6 +809,16 @@ impl EdgarClient {
         as_of: NaiveDate,
     ) -> Result<(NportFiling, NportReport), EdgarError> {
         let fund = self.fund_id(ticker).await?;
+        self.nport_as_of_for(&fund, ticker, as_of).await
+    }
+
+    /// [`EdgarClient::nport_as_of`] for an already resolved fund (no ticker-map lookups).
+    pub async fn nport_as_of_for(
+        &self,
+        fund: &FundId,
+        ticker: &str,
+        as_of: NaiveDate,
+    ) -> Result<(NportFiling, NportReport), EdgarError> {
         let filings = self.nport_filings(&fund.series_id).await?;
         let original =
             select_original(&filings, as_of).ok_or_else(|| EdgarError::NoNportFiling {
