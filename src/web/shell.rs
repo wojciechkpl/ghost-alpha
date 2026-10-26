@@ -35,6 +35,7 @@ pub const NAV: &[NavGroup] = &[
         label: "Portfolio",
         items: &[
             NavItem::new("/portfolio", "Overview"),
+            NavItem::new("/portfolio/concentration", "Concentration"),
             NavItem::new("/allocation", "Allocation"),
             NavItem::new("/concentration-decay", "Concentration Decay"),
             NavItem::new("/tax", "Tax"),

@@ -796,7 +796,7 @@ pub fn donut_svg(slices: &[DonutSlice], width: u32, height: u32) -> String {
             ir = inner_r,
         ));
         // Label
-        let lab = &s.label;
+        let lab = svg_escape(&s.label);
         body.push_str(&format!(
             r#"<text x="{cx:.1}" y="{ly:.1}" font-size="11" text-anchor="middle">{lab} 100%</text>"#,
             ly = cy - outer_r - 6.0,
@@ -842,7 +842,7 @@ pub fn donut_svg(slices: &[DonutSlice], width: u32, height: u32) -> String {
                 let lx = cx + label_r * mid_angle.cos();
                 let ly = cy + label_r * mid_angle.sin();
                 let anchor = if lx > cx { "start" } else { "end" };
-                let lab = &s.label;
+                let lab = svg_escape(&s.label);
                 body.push_str(&format!(
                     r#"<text x="{lx:.1}" y="{ly:.1}" font-size="11" text-anchor="{anchor}">{lab} {pct:.0}%</text>"#,
                 ));

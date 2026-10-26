@@ -174,8 +174,9 @@ fn cache_dir_from_env() -> Result<PathBuf, EdgarError> {
     )
 }
 
-/// Build a client from env vars plus the optional config-file User-Agent.
-fn build_client(config_user_agent: Option<&str>) -> Result<EdgarClient, EdgarError> {
+/// Build a client from env vars plus the optional config-file User-Agent
+/// (shared by the CLI and `serve`).
+pub fn build_client(config_user_agent: Option<&str>) -> Result<EdgarClient, EdgarError> {
     let env_ua = env_non_empty(ENV_USER_AGENT);
     let cfg = EdgarConfig::resolve(config_user_agent, env_ua.as_deref(), cache_dir_from_env()?)?;
     let client = EdgarClient::new(cfg)?;

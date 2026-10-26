@@ -9,3 +9,15 @@ document.addEventListener("htmx:afterSwap", function (e) {
   if (!region) return;
   region.textContent = "Updated " + new Date().toLocaleTimeString();
 });
+
+// The concentration page lazy-loads #etf-overlap. htmx drops 4xx/5xx bodies by
+// default, which would leave the placeholder "loading" forever; swap the
+// server's error region in instead.
+document.addEventListener("htmx:beforeSwap", function (e) {
+  var d = e.detail;
+  if (!d || !d.target || d.target.id !== "etf-overlap") return;
+  if (d.xhr && d.xhr.status >= 400) {
+    d.shouldSwap = true;
+    d.isError = false;
+  }
+});
