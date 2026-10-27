@@ -72,22 +72,31 @@ struct Params {
     buy: f64,
 }
 
-fn valid_ticker(s: &str) -> bool {
+pub(super) fn valid_ticker(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= MAX_TICKER_LEN
         && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
 }
 
+/// The optional `symbol` parameter, validated and upper-cased.
+pub(super) fn parse_symbol(q: &HashMap<String, String>) -> Result<Option<String>, &'static str> {
+    match q
+        .get("symbol")
+        .map(String::as_str)
+        .filter(|v| !v.is_empty())
+    {
+        None => Ok(None),
+        Some(s) if valid_ticker(s) => Ok(Some(s.to_ascii_uppercase())),
+        Some(_) => Err("Invalid symbol: use letters, digits, '.' and '-' only."),
+    }
+}
+
 /// Parse and validate. The error is a static message that never contains input.
 fn parse_params(q: &HashMap<String, String>) -> Result<Params, &'static str> {
     let non_empty = |k: &str| q.get(k).map(String::as_str).filter(|v| !v.is_empty());
 
-    let symbol = match non_empty("symbol") {
-        None => None,
-        Some(s) if valid_ticker(s) => Some(s.to_ascii_uppercase()),
-        Some(_) => return Err("Invalid symbol: use letters, digits, '.' and '-' only."),
-    };
+    let symbol = parse_symbol(q)?;
     let limit = match non_empty("limit") {
         None => DEFAULT_LIMIT,
         Some(s) => match s.parse::<f64>() {
@@ -125,7 +134,7 @@ fn parse_params(q: &HashMap<String, String>) -> Result<Params, &'static str> {
     })
 }
 
-fn bad_request(fragment: bool, msg: &str) -> Response {
+pub(super) fn bad_request(fragment: bool, msg: &str) -> Response {
     let body = if fragment {
         format!(
             r#"<div id="etf-overlap" role="alert"><p class="error">{}</p></div>"#,
@@ -140,7 +149,7 @@ fn bad_request(fragment: bool, msg: &str) -> Response {
     (StatusCode::BAD_REQUEST, Html(body)).into_response()
 }
 
-const DB_ERROR: &str =
+pub(super) const DB_ERROR: &str =
     "The portfolio could not be read from the database. Check the server log and try again.";
 
 fn db_error_fragment() -> Response {
@@ -154,7 +163,7 @@ fn db_error_fragment() -> Response {
 }
 
 /// Percent-encode everything except RFC 3986 unreserved characters.
-fn pct_encode(s: &str) -> String {
+pub(super) fn pct_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
@@ -181,11 +190,13 @@ fn query_string(symbol: &str, p: &Params) -> String {
 
 // ─── Data ───────────────────────────────────────────────────────────────────
 
-struct Portfolio {
+pub(super) struct Portfolio {
     /// Positions with a usable price, largest first.
-    positions: Vec<PositionValue>,
+    pub(super) positions: Vec<PositionValue>,
     /// Positions with neither a close nor a positive cost basis (excluded from all maths).
-    unpriced: Vec<PositionValue>,
+    pub(super) unpriced: Vec<PositionValue>,
+    /// All open lots as stored.
+    pub(super) lots: Vec<TaxLotRow>,
     lot_count: usize,
     /// Newest close date across the held tickers.
     priced_as_of: Option<NaiveDate>,
@@ -194,7 +205,7 @@ struct Portfolio {
 
 /// Lots and the latest close per ticker, read on a blocking thread. `Err` means
 /// the database (or its task) failed; callers must not treat that as "empty".
-async fn load_portfolio(state: &AppState) -> Result<Portfolio, ()> {
+pub(super) async fn load_portfolio(state: &AppState) -> Result<Portfolio, ()> {
     let repo = state.repo.clone();
     let loaded = tokio::task::spawn_blocking(move || {
         let lots: Vec<TaxLotRow> = repo.get_all_tax_lots()?;
@@ -227,6 +238,7 @@ async fn load_portfolio(state: &AppState) -> Result<Portfolio, ()> {
                 positions,
                 unpriced,
                 lot_count: lots.len(),
+                lots,
                 priced_as_of,
                 close_dates,
             })
@@ -244,7 +256,7 @@ async fn load_portfolio(state: &AppState) -> Result<Portfolio, ()> {
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
 
-fn fmt_usd(v: f64) -> String {
+pub(super) fn fmt_usd(v: f64) -> String {
     let rounded = v.abs().round() as u128;
     let digits = rounded.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3 + 2);
@@ -258,17 +270,17 @@ fn fmt_usd(v: f64) -> String {
     format!("{sign}${out}")
 }
 
-fn pct1(fraction: f64) -> String {
+pub(super) fn pct1(fraction: f64) -> String {
     format!("{:.1}%", fraction * 100.0)
 }
 
 /// At most one decimal ("25", "33.3").
-fn num1(v: f64) -> String {
+pub(super) fn num1(v: f64) -> String {
     let s = format!("{v:.1}");
     s.strip_suffix(".0").map(str::to_string).unwrap_or(s)
 }
 
-fn kpi(name: &str, label: &str, value: &str) -> String {
+pub(super) fn kpi(name: &str, label: &str, value: &str) -> String {
     format!(
         r#"<div class="kpi" data-kpi="{name}"><span class="kpi-label">{label}</span> <strong>{value}</strong></div>"#
     )
@@ -281,6 +293,10 @@ pub async fn concentration_page(
     Query(q): Query<HashMap<String, String>>,
 ) -> Response {
     let params = match parse_params(&q) {
+        Ok(p) => p,
+        Err(msg) => return bad_request(false, msg),
+    };
+    let unwind_params = match super::unwind::parse_unwind_params(&q) {
         Ok(p) => p,
         Err(msg) => return bad_request(false, msg),
     };
@@ -298,11 +314,16 @@ pub async fn concentration_page(
         return page(&state, PAGE_PATH, TITLE, body).await.into_response();
     };
     let title = format!("{TITLE} \u{2014} {}", summary.symbol);
-    let body = page_body(&pf, &summary, &params);
+    let body = page_body(&pf, &summary, &params, &unwind_params);
     page(&state, PAGE_PATH, &title, &body).await.into_response()
 }
 
-fn page_body(pf: &Portfolio, s: &ConcentrationSummary, p: &Params) -> String {
+fn page_body(
+    pf: &Portfolio,
+    s: &ConcentrationSummary,
+    p: &Params,
+    up: &super::unwind::UnwindParams,
+) -> String {
     let at_cost = pf.positions.iter().filter(|x| x.priced_at_cost).count();
     let as_of = pf
         .priced_as_of
@@ -431,9 +452,16 @@ fn page_body(pf: &Portfolio, s: &ConcentrationSummary, p: &Params) -> String {
     </div>
   </section>
 </div>
+<section aria-labelledby="unwind-h">
+  <h2 id="unwind-h">Unwind schedule and projection for {sym}</h2>
+  <div class="unwind-live" aria-live="polite">
+    {unwind}
+  </div>
+</section>
 <p class="muted"><small>Equity holdings only; debt and derivatives are listed separately. Not tax or investment advice.</small></p>"#,
         lots = pf.lot_count,
         sym = html_escape(&s.symbol),
+        unwind = super::unwind::region_placeholder(&s.symbol, p.symbol.is_none(), up),
     )
 }
 

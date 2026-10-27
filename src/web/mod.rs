@@ -7,6 +7,7 @@ pub mod freshness;
 pub mod quarterly_report;
 pub mod routes;
 pub mod shell;
+pub mod unwind;
 
 use std::sync::Arc;
 
@@ -165,6 +166,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/partials/macro-gauges",
             axum::routing::get(routes::macro_gauges_partial),
+        )
+        .route(
+            "/partials/unwind",
+            axum::routing::get(unwind::unwind_partial),
         )
         .route(
             "/partials/etf-overlap",

@@ -126,8 +126,9 @@ pub fn project_multi_year_with_strategy(
                 year_state += impact.state_tax;
                 year_niit += impact.niit;
                 year_shares += shares;
-                // Track cumulative gains for state deduction calculation
-                if impact.realised_gain > 0.0 {
+                // Track cumulative gains for the state deduction. A long-term-only
+                // state (WA) neither taxes short-term gains nor uses the deduction on them.
+                if impact.realised_gain > 0.0 && !(state.long_term_only && !impact.is_long_term) {
                     state_gains_ytd += impact.realised_gain;
                 }
             }

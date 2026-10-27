@@ -2515,21 +2515,14 @@ fn run_sell_plan(
     use ghost_alpha::portfolio::prepare::{
         format_sell_plan, prepare_selling_programme, SellDistribution, SellPlanInput,
     };
-    use ghost_alpha::tax::brackets::FilingStatus;
 
     let acquired_date = chrono::NaiveDate::parse_from_str(acquired, "%Y-%m-%d")
         .with_context(|| format!("Invalid date '{}', expected YYYY-MM-DD", acquired))?;
 
-    let filing_status = match filing.to_lowercase().as_str() {
-        "single" | "s" => FilingStatus::Single,
-        "mfj" | "married" | "joint" => FilingStatus::MarriedFilingJointly,
-        "mfs" | "separate" => FilingStatus::MarriedFilingSeparately,
-        "hoh" | "head" => FilingStatus::HeadOfHousehold,
-        other => anyhow::bail!(
-            "Unknown filing status '{}'. Use: single, mfj, mfs, hoh",
-            other
-        ),
-    };
+    let filing_status =
+        ghost_alpha::tax::brackets::parse_filing_status(filing).ok_or_else(|| {
+            anyhow::anyhow!("Unknown filing status '{filing}'. Use: single, mfj, mfs, hoh")
+        })?;
 
     let dist = match distribution.to_lowercase().as_str() {
         "even" | "equal" => SellDistribution::Even,
@@ -3893,16 +3886,10 @@ fn run_sell_compare(
     let acquired_date = chrono::NaiveDate::parse_from_str(acquired, "%Y-%m-%d")
         .with_context(|| format!("Invalid date '{}', expected YYYY-MM-DD", acquired))?;
 
-    let filing_status = match filing.to_lowercase().as_str() {
-        "single" | "s" => FilingStatus::Single,
-        "mfj" | "married" | "joint" => FilingStatus::MarriedFilingJointly,
-        "mfs" | "separate" => FilingStatus::MarriedFilingSeparately,
-        "hoh" | "head" => FilingStatus::HeadOfHousehold,
-        other => anyhow::bail!(
-            "Unknown filing status '{}'. Use: single, mfj, mfs, hoh",
-            other
-        ),
-    };
+    let filing_status =
+        ghost_alpha::tax::brackets::parse_filing_status(filing).ok_or_else(|| {
+            anyhow::anyhow!("Unknown filing status '{filing}'. Use: single, mfj, mfs, hoh")
+        })?;
 
     let brackets = match filing_status {
         FilingStatus::Single => FederalCapGainsBrackets::single_2024(),

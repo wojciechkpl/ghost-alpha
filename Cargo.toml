@@ -74,6 +74,7 @@ rand         = "0.8"
 uuid         = { version = "1", features = ["v4", "serde"] }
 nalgebra = "0.33"
 rand_distr = "0.4"
+rand_chacha = "0.3"
 
 [dev-dependencies]
 tokio-test   = "0.4"

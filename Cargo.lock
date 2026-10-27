@@ -1025,6 +1025,7 @@ dependencies = [
  "nalgebra",
  "ort",
  "rand",
+ "rand_chacha",
  "rand_distr",
  "reqwest",
  "rmcp",

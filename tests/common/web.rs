@@ -433,6 +433,50 @@ pub fn app_with_edgar_timeout(
     })
 }
 
+/// Router with `config.profile` set (state / filing / other_income) and no EDGAR client.
+pub fn app_with_profile(
+    seed: impl FnOnce(&SqliteRepository),
+    profile: Option<ghost_alpha::config::ProfileConfig>,
+) -> Router {
+    let repo = SqliteRepository::open_in_memory().expect("in-memory db");
+    seed(&repo);
+    let mut config: AppConfig = toml::from_str("").unwrap();
+    config.profile = profile;
+    create_router(AppState {
+        repo: Arc::new(repo),
+        config: Arc::new(config),
+        edgar: None,
+        etf_timeout: None,
+    })
+}
+
+/// `ProfileConfig` shorthand.
+pub fn profile(state: &str, filing: &str, other_income: f64) -> ghost_alpha::config::ProfileConfig {
+    ghost_alpha::config::ProfileConfig {
+        state: Some(state.to_string()),
+        filing: Some(filing.to_string()),
+        other_income: Some(other_income),
+    }
+}
+
+/// Insert one open tax lot with an explicit acquisition date (YYYY-MM-DD).
+pub fn insert_lot_dated(
+    repo: &SqliteRepository,
+    id: &str,
+    ticker: &str,
+    shares: f64,
+    cost: f64,
+    acquired: &str,
+) {
+    let conn = repo.connection().unwrap();
+    conn.execute(
+        "INSERT INTO tax_lots (id, ticker, shares, cost_basis_per_share, acquired_date, \
+         acquisition_type, remaining_shares) VALUES (?1, ?2, ?3, ?4, ?5, 'BUY', ?3)",
+        rusqlite::params![id, ticker, shares, cost, acquired],
+    )
+    .unwrap();
+}
+
 /// Insert one open tax lot (remaining == shares).
 pub fn insert_lot(repo: &SqliteRepository, id: &str, ticker: &str, shares: f64, cost: f64) {
     let conn = repo.connection().unwrap();
