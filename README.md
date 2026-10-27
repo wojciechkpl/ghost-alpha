@@ -53,6 +53,8 @@ Features: htmx-powered live updates, color-coded severity/grade badges, watchlis
 
 The **Concentration** page (`/portfolio/concentration`, Portfolio menu) shows how concentrated your imported lots are: weights at the latest close (cost basis where there are no prices, marked "at cost"), the top-1 limit check and effective number of positions. A lazily loaded panel then looks through the ETFs you hold, using SEC N-PORT filings, and ranks diversifier ETFs by your exposure to the concentrated stock after buying `$X` of each. It needs an EDGAR User-Agent (`ghost-alpha setup --section edgar`); without one the page works and the panel explains how to enable it. Query parameters: `symbol`, `limit`, `candidates`, `buy`.
 
+Below it, an **unwind schedule and projection** panel shows what selling the concentrated stock over 1-10 years would do: a per-period table (shares, proceeds, tax from your `[profile]`, net, remaining weight; highest-cost lots first) and a seeded Monte Carlo fan chart of portfolio value, holding versus unwinding, with downside (p10) figures. Query parameters: `years`, `cadence` (`quarterly`|`annual`), `growth` (price growth, % a year), `mu` and `vol` (the stock's expected return and volatility, % a year). The projection is illustrative and not tax or investment advice.
+
 ---
 
 ## Table of Contents
@@ -941,6 +943,7 @@ src/
 │   ├── routes.rs              Dashboard routes (htmx + pico.css)
 │   ├── dashboard_routes.rs    Portfolio, tax, selling, allocation, geo-risk pages
 │   ├── concentration.rs       Concentration page + N-PORT ETF overlap fragment
+│   ├── unwind.rs              Unwind schedule + projection fragment
 │   ├── diversification_report.rs  Self-contained HTML diversification report
 │   ├── assets.rs              Embedded static file server (rust-embed)
 │   └── charts.rs              SVG generators: donut, frontier, heatmap, decay

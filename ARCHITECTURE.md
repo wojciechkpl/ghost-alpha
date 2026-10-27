@@ -138,6 +138,7 @@ src/
 │   ├── import.rs               # CSV/brokerage import + Fidelity ETL [Gap 6]
 │   ├── ips.rs                  # Investment policy statement
 │   ├── lookthrough.rs          # Position valuation, effective N, ETF look-through, weight after buy
+│   ├── unwind.rs               # HIFO unwind schedule with tax, seeded fan-chart projection
 │   ├── prepare.rs              # Portfolio preparation
 │   └── snapshot.rs             # Point-in-time snapshots
 │
@@ -194,6 +195,7 @@ src/
 │   ├── routes.rs               # Page handlers (htmx + pico.css)
 │   ├── dashboard_routes.rs     # Portfolio, tax, selling pages
 │   ├── concentration.rs        # /portfolio/concentration page + ETF overlap fragment
+│   ├── unwind.rs               # /partials/unwind schedule + projection fragment
 │   ├── diversification_report.rs # Sector, geo, concentration analysis
 │   ├── charts.rs               # SVG chart generation (inline, no JS deps)
 │   ├── quarterly_report.rs     # Quarterly performance reports

@@ -25,11 +25,18 @@ pub fn decorative(svg: &str) -> String {
 /// Adds `role="img"`, `aria-labelledby` and a `<title>`/`<desc>` pair with a
 /// process-unique id, so several charts can share one response.
 pub fn accessible(svg: &str, title: &str, desc: &str) -> String {
+    let id = SVG_ID.fetch_add(1, Ordering::Relaxed);
+    accessible_with_id(svg, title, desc, &id.to_string())
+}
+
+/// [`accessible`] with a caller-chosen id suffix, for fragments that must be
+/// byte-identical across requests. The suffix must be unique within the page
+/// and contain only letters, digits and `-`.
+pub fn accessible_with_id(svg: &str, title: &str, desc: &str, id: &str) -> String {
     debug_assert!(
         svg.trim_start().starts_with("<svg"),
         "accessible() expects an <svg> element"
     );
-    let id = SVG_ID.fetch_add(1, Ordering::Relaxed);
     let Some(open_end) = svg.find('>') else {
         return svg.to_string();
     };
@@ -1144,6 +1151,7 @@ pub fn frontier_svg(
 // ── Fan Chart ────────────────────────────────────────────────────────────────
 
 /// A single year in a fan chart (wealth projection).
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FanChartYear {
     pub year: u32,
     pub p10: f64,
@@ -1170,6 +1178,18 @@ fn format_dollars(v: f64) -> String {
 /// Draws graduated area bands: p10-p90 (lightest), p25-p75 (medium), and
 /// p50 as a solid dark line. Uses graduated opacity of `--ga-series-1`.
 pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> String {
+    fan_chart_svg_with_overlay(percentiles, None, width, height)
+}
+
+/// [`fan_chart_svg`] plus an optional dashed overlay line, one value per
+/// `percentiles` entry (e.g. the median of a comparison scenario). The overlay
+/// is included in the y-range. Year 0 is labelled "Start".
+pub fn fan_chart_svg_with_overlay(
+    percentiles: &[FanChartYear],
+    overlay: Option<&[f64]>,
+    width: u32,
+    height: u32,
+) -> String {
     let ml: f64 = 70.0;
     let mr: f64 = 20.0;
     let mt: f64 = 20.0;
@@ -1214,6 +1234,16 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
                 .fold(f64::NEG_INFINITY, f64::max)
         })
         .fold(f64::NEG_INFINITY, f64::max);
+
+    let (y_min, y_max) = overlay
+        .map(|o| {
+            o.iter()
+                .take(n)
+                .cloned()
+                .map(safe)
+                .fold((y_min, y_max), |(lo, hi), v| (lo.min(v), hi.max(v)))
+        })
+        .unwrap_or((y_min, y_max));
 
     let y_range = (y_max - y_min).max(1.0);
     let y_lo = y_min - y_range * 0.05;
@@ -1283,6 +1313,18 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
         r#"<path d="{median_d}" fill="none" stroke="{blue}" stroke-width="2"/>"#
     ));
 
+    // Optional dashed overlay line
+    if let Some(overlay) = overlay.filter(|o| !o.is_empty()) {
+        let mut d = String::new();
+        for (i, v) in overlay.iter().take(n).enumerate() {
+            let (x, y) = (x_of(i), y_of(*v));
+            d.push_str(&format!("{}{x:.1},{y:.1}", if i == 0 { "M" } else { " L" }));
+        }
+        body.push_str(&format!(
+            r#"<path d="{d}" fill="none" stroke="var(--ga-series-2)" stroke-width="2" stroke-dasharray="6 4"/>"#
+        ));
+    }
+
     // Y-axis labels (5 ticks)
     for i in 0..=4 {
         let frac = i as f64 / 4.0;
@@ -1301,9 +1343,13 @@ pub fn fan_chart_svg(percentiles: &[FanChartYear], width: u32, height: u32) -> S
         if i % label_step == 0 || i == n - 1 {
             let x = x_of(i);
             let y = height as f64 - 5.0;
+            let yr = if p.year == 0 {
+                "Start".to_string()
+            } else {
+                p.year.to_string()
+            };
             body.push_str(&format!(
                 r#"<text x="{x:.1}" y="{y:.1}" font-size="11" text-anchor="middle">{yr}</text>"#,
-                yr = p.year,
             ));
         }
     }

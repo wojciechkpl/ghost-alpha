@@ -39,12 +39,36 @@ pub struct StateTaxRate {
     /// Annual deduction applied before state cap-gains tax (e.g. WA's $278K).
     /// Gains up to this amount each year are exempt from state tax.
     pub annual_deduction: f64,
+    /// True when the state taxes long-term gains only (Washington's excise tax):
+    /// short-term gains owe no state tax and use none of the deduction.
+    pub long_term_only: bool,
     /// Tiered bracket schedule applied to gains above the deduction.
     /// Empty vec = use flat `rate`. Non-empty = marginal brackets.
     pub brackets: TaxBracketSchedule,
 }
 
+/// Parse a filing-status name as accepted by the CLI (`single`, `mfj`, `mfs`,
+/// `hoh` and their long forms), case-insensitively.
+pub fn parse_filing_status(s: &str) -> Option<FilingStatus> {
+    match s.trim().to_lowercase().as_str() {
+        "single" | "s" => Some(FilingStatus::Single),
+        "mfj" | "married" | "joint" => Some(FilingStatus::MarriedFilingJointly),
+        "mfs" | "separate" => Some(FilingStatus::MarriedFilingSeparately),
+        "hoh" | "head" => Some(FilingStatus::HeadOfHousehold),
+        _ => None,
+    }
+}
+
 impl FederalCapGainsBrackets {
+    /// 2024 brackets for `status` (separate and head-of-household use the
+    /// single schedule, as the CLI does).
+    pub fn for_filing(status: &FilingStatus) -> Self {
+        match status {
+            FilingStatus::MarriedFilingJointly => Self::mfj_2024(),
+            _ => Self::single_2024(),
+        }
+    }
+
     /// 2024 brackets for married filing jointly.
     pub fn mfj_2024() -> Self {
         Self {
@@ -93,6 +117,7 @@ pub fn state_tax_rate(state_code: &str) -> Result<StateTaxRate, TaxError> {
         rate,
         has_ltcg_preference: false,
         annual_deduction: 0.0,
+        long_term_only: false,
         brackets: vec![],
     };
     match state_code {
@@ -111,6 +136,7 @@ pub fn state_tax_rate(state_code: &str) -> Result<StateTaxRate, TaxError> {
             rate: 0.07,
             has_ltcg_preference: false,
             annual_deduction: 278_000.0,
+            long_term_only: true,
             brackets: vec![
                 (722_000.0, 0.07),      // $278K + $722K = $1M boundary
                 (f64::INFINITY, 0.099), // 9.9% above $1M

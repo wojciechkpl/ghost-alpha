@@ -55,7 +55,10 @@ pub fn compute_lot_tax(
     // State tax with annual deduction support.
     // Only the portion of cumulative gains exceeding the deduction is taxed.
     // Marginal approach: tax on (ytd + gain) minus tax already owed on (ytd).
-    let state_tax = if gain <= 0.0 || (state.rate == 0.0 && state.brackets.is_empty()) {
+    let state_tax = if gain <= 0.0
+        || (state.rate == 0.0 && state.brackets.is_empty())
+        || (state.long_term_only && !is_lt)
+    {
         0.0
     } else {
         let ded = state.annual_deduction;
