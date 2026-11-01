@@ -935,6 +935,7 @@ src/
 │   ├── brackets.rs            Federal & state tax brackets, tiered WA (7%/9.9%)
 │   ├── engine.rs              compute_lot_tax — bracket stacking, NIIT, state tiers
 │   ├── projection.rs          Multi-year projections + scenario comparison
+│   ├── year.rs                year_tax — whole-calendar-year tax (shared with the unwind page)
 │   ├── hifo.rs                HIFO + 3-tier priority lot selection
 │   └── harvest.rs             Tax-loss harvesting scanner + wash sale detection
 │
@@ -1005,19 +1006,19 @@ Find the optimal number of years to spread a sale. The `sell-compare` command fi
 
 ```
 $ ghost-alpha sell-compare --ticker AMZN --shares 3000 --cost-basis 50 --price 250 \
-    --state CA --filing single --other-income 150000 --max-years 5
+    --state WA --filing single --other-income 150000 --max-years 5
 
   AMZN — Multi-year scenario comparison (State: WA)
   ────────────────────────────────────────────────────────────────────────
   Years   Shares/yr     Total Tax         Fed       State    Eff %     Savings
   ────────────────────────────────────────────────────────────────────────
-      1        3000       $146152     $100812      $22540    24.4%          $0
-      2        1500       $115880      $90000       $3080    19.3%      $30272
-      3        1000       $112800      $90000          $0    18.8%      $33352 <<<
-      4         750       $112800      $90000          $0    18.8%      $33352
-      5         600       $112800      $90000          $0    18.8%      $33352
+      1        3000       $144995     $101555      $22540    24.2%          $0
+      2        1500       $112080      $90000       $3080    18.7%      $32915
+      3        1000       $107100      $90000          $0    17.8%      $37895
+      4         750       $105200      $90000          $0    17.5%      $39795
+      5         600       $103300      $90000          $0    17.2%      $41695 <<<
   ────────────────────────────────────────────────────────────────────────
-  Spreading over 3 years saves $33352 vs lump sum.
+  Spreading over 5 years saves $41695 vs lump sum.
 ```
 
 ### Fund Allocation

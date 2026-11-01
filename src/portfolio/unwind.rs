@@ -1,8 +1,8 @@
 //! Unwind schedule and seeded Monte Carlo projection for the concentration hub.
 //!
 //! [`build_schedule`] splits a full sale of one concentrated position into
-//! equal-share periods, picks lots highest-cost-first, taxes each sale with
-//! [`compute_lot_tax`] and tracks the stock's weight afterwards. [`project`]
+//! equal-share periods, picks lots highest-cost-first, taxes each sale per
+//! calendar year with [`year_tax`] and tracks the stock's weight afterwards. [`project`]
 //! compares holding with following the schedule on two correlated lognormal
 //! assets (the stock and "the rest"). Everything is deterministic: no clock,
 //! no I/O, and the random stream is a seeded [`ChaCha12Rng`].
@@ -14,9 +14,8 @@ use rand_distr::{Distribution, StandardNormal};
 
 use crate::portfolio::types::TaxLot;
 use crate::projection::monte_carlo::lognormal_params;
-use crate::tax::brackets::{FederalCapGainsBrackets, StateTaxRate};
-use crate::tax::engine::bracket_tax;
 use crate::tax::hifo::hifo_select;
+pub use crate::tax::year::{year_tax, TaxSettings, YearTax};
 use crate::web::charts::FanChartYear;
 
 // ─── Schedule ───────────────────────────────────────────────────────────────
@@ -39,14 +38,6 @@ impl Cadence {
     fn per_year(self) -> u32 {
         12 / self.step_months()
     }
-}
-
-/// Tax inputs from the user's profile.
-#[derive(Debug, Clone)]
-pub struct TaxSettings {
-    pub state: StateTaxRate,
-    pub brackets: FederalCapGainsBrackets,
-    pub other_income: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -96,68 +87,6 @@ pub struct UnwindTotals {
 pub struct UnwindSchedule {
     pub periods: Vec<UnwindPeriod>,
     pub totals: UnwindTotals,
-}
-
-/// Tax for one calendar year (see [`year_tax`]).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct YearTax {
-    pub federal: f64,
-    pub state: f64,
-    pub niit: f64,
-    pub total: f64,
-}
-
-/// Tax for ONE calendar year from its realised short- and long-term gain totals
-/// (either may be negative; no carryforwards and no $3,000 offset).
-///
-/// Short and long term net against each other. Federal tax is the ordinary-bracket
-/// tax on net short-term gain stacked on other income, plus the long-term bracket
-/// tax on net long-term gain stacked on other income plus net short-term gain. NIIT
-/// is `rate * min(net, max(0, other_income + net - threshold))`. States with
-/// `long_term_only` (Washington) tax only the long-term total above the deduction;
-/// other states tax the net gain above the deduction. A net loss owes nothing.
-pub fn year_tax(st_gain: f64, lt_gain: f64, tax: &TaxSettings) -> YearTax {
-    let net = st_gain + lt_gain;
-    if net.is_nan() || net <= 0.0 {
-        return YearTax {
-            federal: 0.0,
-            state: 0.0,
-            niit: 0.0,
-            total: 0.0,
-        };
-    }
-    // IRS-style netting: a loss on one side offsets the other.
-    let (st, lt) = if st_gain < 0.0 {
-        (0.0, lt_gain + st_gain)
-    } else if lt_gain < 0.0 {
-        (st_gain + lt_gain, 0.0)
-    } else {
-        (st_gain, lt_gain)
-    };
-    let b = &tax.brackets;
-    let income = tax.other_income;
-    let federal = bracket_tax(st, &b.short_term_brackets, income)
-        + bracket_tax(lt, &b.long_term_brackets, income + st);
-    let niit = b.niit_rate * net.min((income + net - b.niit_threshold).max(0.0));
-    let s = &tax.state;
-    let taxable = if s.long_term_only {
-        (lt_gain - s.annual_deduction).max(0.0)
-    } else {
-        (net - s.annual_deduction).max(0.0)
-    };
-    let state = if taxable <= 0.0 || (s.rate == 0.0 && s.brackets.is_empty()) {
-        0.0
-    } else if s.brackets.is_empty() {
-        taxable * s.rate
-    } else {
-        bracket_tax(taxable, &s.brackets, 0.0)
-    };
-    YearTax {
-        federal,
-        state,
-        niit,
-        total: federal + state + niit,
-    }
 }
 
 /// Build the unwind schedule. Empty when there is nothing to sell or no years.

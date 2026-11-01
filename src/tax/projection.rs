@@ -1,7 +1,8 @@
 use super::brackets::{FederalCapGainsBrackets, StateTaxRate};
-use super::engine::compute_lot_tax;
 use super::hifo::{hifo_select, priority_select};
+use super::year::{year_tax, TaxSettings};
 use crate::portfolio::types::TaxLot;
+use std::collections::HashMap;
 
 /// Strategy for selecting which lots to sell.
 #[derive(Debug, Clone)]
@@ -35,7 +36,8 @@ pub struct YearProjection {
 /// For each year in `annual_shares`, the projected sale price is
 /// `current_price * (1 + assumed_price_growth)^year_offset` where
 /// `year_offset = year - first_year`. Lots are selected via HIFO and
-/// their remaining shares are decremented across years.
+/// their remaining shares are decremented across years. Tax nets over the
+/// whole calendar year (see [`project_multi_year_with_strategy`]).
 pub fn project_multi_year(
     lots: &[TaxLot],
     annual_shares: &[(u32, f64)],
@@ -58,6 +60,13 @@ pub fn project_multi_year(
 }
 
 /// Like `project_multi_year` but with explicit lot selection strategy.
+///
+/// Tax is computed on whole calendar years: each entry's short- and long-term
+/// gains (term judged at the Jul 1 sale date) are added to the year-to-date
+/// totals and the entry is charged `year_tax(ytd + entry) - year_tax(ytd)` per
+/// component (federal, state, NIIT). Losses net against gains in the same year,
+/// brackets and the NIIT threshold stack across entries, and a later loss entry
+/// may yield negative components (no clamping; no carryforward).
 #[allow(clippy::too_many_arguments)]
 pub fn project_multi_year_with_strategy(
     lots: &[TaxLot],
@@ -77,6 +86,13 @@ pub fn project_multi_year_with_strategy(
     let mut working_lots = lots.to_vec();
     let first_year = annual_shares[0].0;
     let mut cumulative = 0.0;
+    let settings = TaxSettings {
+        state: state.clone(),
+        brackets: brackets.clone(),
+        other_income: other_annual_income,
+    };
+    // Calendar year -> (short-term, long-term) gains realised so far.
+    let mut ytd_by_year: HashMap<u32, (f64, f64)> = HashMap::new();
 
     annual_shares
         .iter()
@@ -103,35 +119,33 @@ pub fn project_multi_year_with_strategy(
 
             let mut year_proceeds = 0.0;
             let mut year_gain = 0.0;
-            let mut year_federal = 0.0;
-            let mut year_state = 0.0;
-            let mut year_niit = 0.0;
             let mut year_shares = 0.0;
-            let mut state_gains_ytd = 0.0;
+            let (mut st_gain, mut lt_gain) = (0.0, 0.0);
 
             for (idx, shares) in &selections {
-                let impact = compute_lot_tax(
-                    &working_lots[*idx],
-                    *shares,
-                    projected_price,
-                    sale_date,
-                    other_annual_income,
-                    brackets,
-                    state,
-                    state_gains_ytd,
-                );
-                year_proceeds += impact.proceeds;
-                year_gain += impact.realised_gain;
-                year_federal += impact.federal_tax;
-                year_state += impact.state_tax;
-                year_niit += impact.niit;
+                let lot = &working_lots[*idx];
+                let proceeds = shares * projected_price;
+                let gain = proceeds - shares * lot.cost_basis_per_share;
+                year_proceeds += proceeds;
+                year_gain += gain;
                 year_shares += shares;
-                // Track cumulative gains for the state deduction. A long-term-only
-                // state (WA) neither taxes short-term gains nor uses the deduction on them.
-                if impact.realised_gain > 0.0 && !(state.long_term_only && !impact.is_long_term) {
-                    state_gains_ytd += impact.realised_gain;
+                if lot.is_long_term(sale_date) {
+                    lt_gain += gain;
+                } else {
+                    st_gain += gain;
                 }
             }
+
+            // Tax is the change in the calendar year's whole-year tax, so
+            // same-year entries stack and losses net against gains.
+            let ytd = ytd_by_year.entry(year).or_insert((0.0, 0.0));
+            let before = year_tax(ytd.0, ytd.1, &settings);
+            let after = year_tax(ytd.0 + st_gain, ytd.1 + lt_gain, &settings);
+            ytd.0 += st_gain;
+            ytd.1 += lt_gain;
+            let year_federal = after.federal - before.federal;
+            let year_state = after.state - before.state;
+            let year_niit = after.niit - before.niit;
 
             // Decrement remaining shares in working lots.
             for (idx, shares) in &selections {
