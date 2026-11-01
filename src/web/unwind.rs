@@ -2,14 +2,15 @@
 //! chart. `GET /partials/unwind` renders the panel that the concentration page
 //! lazy-loads into `#unwind`; the page itself only embeds the placeholder.
 //!
-//! Query parameters (validated before any database access, never reflected):
+//! Query parameters (validated before any database access; only the validated,
+//! normalised values are reflected, in the controls form and `HX-Replace-Url`):
 //! `symbol`, `years` (1-10), `cadence` (quarterly|annual), `growth`, `mu` and
 //! `vol` (percent per year; growth and mu in -50..=50, vol in 1..=150).
 
 use std::collections::HashMap;
 
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use chrono::NaiveDate;
 use uuid::Uuid;
@@ -18,16 +19,17 @@ use crate::config::AppConfig;
 use crate::portfolio::lookthrough::summarize;
 use crate::portfolio::types::{AcquisitionType, TaxLot};
 use crate::portfolio::unwind::{
-    build_schedule, project, Cadence, ProjectionInput, TaxSettings, UnwindInput, DEFAULT_PATHS,
-    DEFAULT_REST_MU, DEFAULT_REST_SIGMA, DEFAULT_RHO, PROJECTION_SEED,
+    build_schedule, project, Cadence, ProjectionInput, TaxSettings, UnwindInput, UnwindYear,
+    YearTax, DEFAULT_PATHS, DEFAULT_REST_MU, DEFAULT_REST_SIGMA, DEFAULT_RHO, PROJECTION_SEED,
 };
 use crate::tax::brackets::{
     parse_filing_status, state_tax_rate, FederalCapGainsBrackets, FilingStatus,
 };
 
-use super::charts::{accessible_with_id, fan_chart_svg_with_overlay};
+use super::charts::{accessible_with_id, fan_chart_svg_with_overlay, tax_by_year_svg, TaxYearBar};
 use super::concentration::{
-    fmt_usd, kpi, load_portfolio, num1, parse_symbol, pct1, pct_encode, valid_ticker, DB_ERROR,
+    fmt_usd, kpi, load_portfolio, num1, parse_symbol, pct1, pct_encode, present_overlap_params,
+    valid_ticker, DB_ERROR, PAGE_PATH,
 };
 use super::shell::{html_escape, table_view};
 use super::AppState;
@@ -126,6 +128,128 @@ pub(super) fn region_placeholder(symbol: &str, defaulted: bool, up: &UnwindParam
       <noscript><a href="{PARTIAL_PATH}?{qs}">Load the unwind schedule</a></noscript>
     </div>"#
     )
+}
+
+/// The what-if controls form rendered by the page (outside `.unwind-live`, so it
+/// survives swaps and 400s). Empty when `show` is false. Values are the validated
+/// parameters; hidden inputs keep the symbol and the overlap settings for the
+/// no-JS submit. Everything dynamic goes through `html_escape`.
+pub(super) fn controls_form(
+    symbol: Option<&str>,
+    up: &UnwindParams,
+    overlap: &[(&'static str, String)],
+    show: bool,
+) -> String {
+    if !show {
+        return String::new();
+    }
+    let mut hidden = String::new();
+    if let Some(s) = symbol {
+        hidden.push_str(&format!(
+            r#"<input type="hidden" name="symbol" value="{}">"#,
+            html_escape(s)
+        ));
+    }
+    for (name, value) in overlap {
+        hidden.push_str(&format!(
+            r#"<input type="hidden" name="{name}" value="{}">"#,
+            html_escape(value)
+        ));
+    }
+    let sel = |c: Cadence| if up.cadence == c { " selected" } else { "" };
+    // (id, label, value, default shown as placeholder, min, max, step, help text)
+    let num = |id: &str,
+               label: &str,
+               value: String,
+               default: &str,
+               (min, max, step): (&str, &str, &str),
+               help: Option<&str>| {
+        let (described, help_html) = match help {
+            Some(h) => (
+                format!(r#" aria-describedby="unwind-{id}-help""#),
+                format!(
+                    r#"<small id="unwind-{id}-help" class="muted">{}</small>"#,
+                    html_escape(h)
+                ),
+            ),
+            None => (String::new(), String::new()),
+        };
+        format!(
+            r#"<div class="field"><label for="unwind-{id}">{label}</label> <input type="number" id="unwind-{id}" name="{id}" value="{}" placeholder="{default}" min="{min}" max="{max}" step="{step}"{described}>{help_html}</div>"#,
+            html_escape(&value)
+        )
+    };
+    format!(
+        r##"<form id="unwind-controls" action="{PAGE_PATH}" method="get" novalidate hx-history="false" hx-get="{PARTIAL_PATH}" hx-target="#unwind" hx-swap="outerHTML" hx-trigger="change delay:400ms, submit" hx-sync="this:replace">
+    <fieldset><legend>What-if assumptions</legend>
+    {years}
+    <div class="field"><label for="unwind-cadence">Sales cadence</label> <select id="unwind-cadence" name="cadence"><option value="quarterly"{q}>Quarterly</option><option value="annual"{a}>Annual</option></select></div>
+    {growth}
+    {mu}
+    {vol}
+    {hidden}
+    <button type="submit">Update</button>
+    </fieldset>
+  </form>"##,
+        years = num(
+            "years",
+            "Years to sell over",
+            up.years.to_string(),
+            "3",
+            ("1", "10", "1"),
+            None
+        ),
+        growth = num(
+            "growth",
+            "Price growth (% a year)",
+            up.growth.to_string(),
+            "0",
+            ("-50", "50", "0.5"),
+            Some("The price path used for the sale schedule.")
+        ),
+        mu = num(
+            "mu",
+            "Expected return (% a year)",
+            up.mu.to_string(),
+            "8",
+            ("-50", "50", "0.5"),
+            Some("The expected return used in the Monte Carlo projection.")
+        ),
+        vol = num(
+            "vol",
+            "Volatility (% a year)",
+            up.vol.to_string(),
+            "30",
+            ("1", "150", "0.5"),
+            None
+        ),
+        q = sel(Cadence::Quarterly),
+        a = sel(Cadence::Annual),
+    )
+}
+
+/// Canonical page URL for the validated parameters, for `HX-Replace-Url`.
+fn replace_url(
+    requested: Option<&str>,
+    up: &UnwindParams,
+    overlap: &[(&'static str, String)],
+) -> String {
+    let mut url = format!("{PAGE_PATH}?");
+    if let Some(s) = requested {
+        url.push_str(&format!("symbol={}&", pct_encode(s)));
+    }
+    url.push_str(&format!(
+        "years={}&cadence={}&growth={}&mu={}&vol={}",
+        up.years,
+        cadence_name(up.cadence),
+        pct_encode(&up.growth.to_string()),
+        pct_encode(&up.mu.to_string()),
+        pct_encode(&up.vol.to_string()),
+    ));
+    for (name, value) in overlap {
+        url.push_str(&format!("&{name}={}", pct_encode(value)));
+    }
+    url
 }
 
 // ─── Responses ──────────────────────────────────────────────────────────────
@@ -238,6 +362,7 @@ fn to_tax_lot(row: &crate::storage::db::TaxLotRow, today: NaiveDate) -> TaxLot {
 
 pub async fn unwind_partial(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Response {
     let requested = match parse_symbol(&q) {
@@ -464,6 +589,13 @@ pub async fn unwind_partial(
         &table_rows,
     );
 
+    // Tax by calendar year (only with a supported profile state).
+    let tax_years = if has_tax && !schedule.years.is_empty() {
+        tax_years_panel(&schedule.years)
+    } else {
+        String::new()
+    };
+
     let hint = if let Some(st) = &unsupported_state {
         format!(
             r#"<p role="note" class="muted"><small>Tax is not shown because the state "{}" in your profile is not supported. Run <code>ghost-alpha setup --section profile</code> to choose a supported state.</small></p>"#,
@@ -515,6 +647,7 @@ pub async fn unwind_partial(
 <tbody>{rows}</tbody></table>
 <div class="chart-container">{chart}</div>
 {view}
+{tax_years}
 <p><strong>Illustrative assumptions.</strong> Stock expected return {mu}% and volatility {vol}% a year; rest of the portfolio {rest_mu:.0}% and {rest_sigma:.0}%; correlation {rho}; {paths} simulated paths with random seed {seed}. Schedule prices grow {growth}% a year. Sales are modelled at the start of each year and net proceeds move into the rest of the portfolio. Hold values are before tax that would be due on a later sale; unwind proceeds are reduced by the schedule's average tax rate ({rate:.1}%). Not tax or investment advice.</p>"#,
         kpis = kpis.join("\n"),
         mu = num1(up.mu),
@@ -527,5 +660,79 @@ pub async fn unwind_partial(
         paths = DEFAULT_PATHS,
         seed = PROJECTION_SEED,
     );
-    region(&inner).into_response()
+    let mut resp = region(&inner).into_response();
+    let header_is = |name: &str, want: &str| {
+        headers
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.eq_ignore_ascii_case(want))
+    };
+    // Only the controls form rewrites the URL: the placeholder's own load
+    // request must not, or it would drop limit/candidates/buy.
+    if header_is("hx-request", "true") && header_is("hx-trigger", "unwind-controls") {
+        let url = replace_url(requested.as_deref(), &up, &present_overlap_params(&q));
+        if let Ok(v) = HeaderValue::from_str(&url) {
+            resp.headers_mut().insert("hx-replace-url", v);
+        }
+    }
+    resp
+}
+
+/// Heading, stacked bar chart and table view of tax per calendar year.
+fn tax_years_panel(years: &[UnwindYear]) -> String {
+    let rows: Vec<(&UnwindYear, YearTax)> =
+        years.iter().filter_map(|y| y.tax.map(|t| (y, t))).collect();
+    let bars: Vec<TaxYearBar> = rows
+        .iter()
+        .map(|(y, t)| TaxYearBar {
+            label: y.year.to_string(),
+            federal: t.federal.max(0.0),
+            state: t.state.max(0.0),
+            niit: t.niit.max(0.0),
+        })
+        .collect();
+    let desc = format!(
+        "Stacked bars of federal, state and NIIT tax for each calendar year. {}.",
+        rows.iter()
+            .map(|(y, t)| format!("{}: {}", y.year, fmt_usd(t.total)))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    let chart = accessible_with_id(
+        &tax_by_year_svg(&bars, 640, 320),
+        "Tax by calendar year",
+        &desc,
+        "unwind-tax-years",
+    );
+    let table_rows: Vec<Vec<String>> = rows
+        .iter()
+        .map(|(y, t)| {
+            let pct = if y.proceeds > 0.0 {
+                t.total / y.proceeds
+            } else {
+                0.0
+            };
+            vec![
+                y.year.to_string(),
+                fmt_usd(t.federal),
+                fmt_usd(t.state),
+                fmt_usd(t.niit),
+                fmt_usd(t.total),
+                pct1(pct),
+            ]
+        })
+        .collect();
+    let view = table_view(
+        "Tax by calendar year: federal, state and NIIT",
+        &[
+            "Year",
+            "Federal",
+            "State",
+            "NIIT",
+            "Total",
+            "Tax % of proceeds",
+        ],
+        &table_rows,
+    );
+    format!(r#"<h3>Tax by calendar year</h3><div class="chart-container">{chart}</div>{view}"#)
 }
