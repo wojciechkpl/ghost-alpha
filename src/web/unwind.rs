@@ -1,11 +1,17 @@
-//! Concentration hub, L2b slice 1: the unwind schedule and projection fan
-//! chart. `GET /partials/unwind` renders the panel that the concentration page
+//! Concentration hub, L2b: the unwind schedule, projection fan chart, tax by calendar year and
+//! spread comparison. `GET /partials/unwind` renders the panel that the concentration page
 //! lazy-loads into `#unwind`; the page itself only embeds the placeholder.
 //!
 //! Query parameters (validated before any database access; only the validated,
 //! normalised values are reflected, in the controls form and `HX-Replace-Url`):
 //! `symbol`, `years` (1-10), `cadence` (quarterly|annual), `growth`, `mu` and
 //! `vol` (percent per year; growth and mu in -50..=50, vol in 1..=150).
+//!
+//! The "Compare spreads" section puts selling over 1 to 5 years side by side (tax, the average
+//! tax rate on the gain, after-tax proceeds and year-5 downside), computed by [`compare_spreads`]
+//! in the same blocking task as the main projection. It adds no query parameters; each spread
+//! label links to the canonical page URL with `years=N`, so the comparison works without
+//! JavaScript.
 
 use std::collections::HashMap;
 
@@ -19,8 +25,10 @@ use crate::config::AppConfig;
 use crate::portfolio::lookthrough::summarize;
 use crate::portfolio::types::{AcquisitionType, TaxLot};
 use crate::portfolio::unwind::{
-    build_schedule, project, Cadence, ProjectionInput, TaxSettings, UnwindInput, UnwindYear,
-    YearTax, DEFAULT_PATHS, DEFAULT_REST_MU, DEFAULT_REST_SIGMA, DEFAULT_RHO, PROJECTION_SEED,
+    build_schedule, compare_spreads, effective_tax_rate, project, sell_fractions, Cadence,
+    ProjectionInput, SpreadComparison, TaxSettings, UnwindInput, UnwindYear, YearTax,
+    DEFAULT_PATHS, DEFAULT_REST_MU, DEFAULT_REST_SIGMA, DEFAULT_RHO, PROJECTION_SEED,
+    SPREAD_MAX_YEARS,
 };
 use crate::tax::brackets::{
     parse_filing_status, state_tax_rate, FederalCapGainsBrackets, FilingStatus,
@@ -417,7 +425,7 @@ pub async fn unwind_partial(
     let has_tax = tax.is_some();
     let bracket_year = tax.as_ref().map(|t| t.brackets.year);
 
-    let schedule = build_schedule(&UnwindInput {
+    let base = UnwindInput {
         lots,
         price: position.price,
         other_value,
@@ -426,25 +434,11 @@ pub async fn unwind_partial(
         growth: up.growth / 100.0,
         start: today,
         tax,
-    });
+    };
+    let schedule = build_schedule(&base);
 
     // Per-year fractions of the original shares, and the effective tax rate.
-    let per_year = match up.cadence {
-        Cadence::Quarterly => 4,
-        Cadence::Annual => 1,
-    };
-    let mut sell_fractions = vec![0.0; up.years as usize];
-    if schedule.totals.shares > 0.0 {
-        for (k, p) in schedule.periods.iter().enumerate() {
-            if let Some(f) = sell_fractions.get_mut(k / per_year) {
-                *f += p.shares / schedule.totals.shares;
-            }
-        }
-    }
-    let tax_rate = match schedule.totals.tax {
-        Some(t) if schedule.totals.proceeds > 0.0 => t / schedule.totals.proceeds,
-        _ => 0.0,
-    };
+    let tax_rate = effective_tax_rate(&schedule.totals);
     let proj_input = ProjectionInput {
         stock_value: summary.direct_value,
         other_value,
@@ -455,20 +449,27 @@ pub async fn unwind_partial(
         rest_sigma: DEFAULT_REST_SIGMA,
         rho: DEFAULT_RHO,
         paths: DEFAULT_PATHS,
-        sell_fractions,
+        sell_fractions: sell_fractions(&schedule, up.cadence, up.years),
         tax_rate,
     };
-    let proj =
-        match tokio::task::spawn_blocking(move || project(&proj_input, PROJECTION_SEED)).await {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::error!("unwind: projection task failed: {e}");
-                return alert(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "The projection could not be computed.",
-                );
-            }
-        };
+    // The comparison is skipped when there is nothing to sell.
+    let want_spreads = schedule.totals.shares > 0.0;
+    let (proj, spreads) = match tokio::task::spawn_blocking(move || {
+        let spreads = want_spreads
+            .then(|| compare_spreads(&base, &proj_input, SPREAD_MAX_YEARS, PROJECTION_SEED));
+        (project(&proj_input, PROJECTION_SEED), spreads)
+    })
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("unwind: projection task failed: {e}");
+            return alert(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "The projection could not be computed.",
+            );
+        }
+    };
 
     let sym = html_escape(&symbol);
     let t = &schedule.totals;
@@ -628,11 +629,11 @@ pub async fn unwind_partial(
         }
         _ => String::new(),
     };
-    let rate_pct = if t.proceeds > 0.0 {
-        t.tax.map_or(0.0, |x| x / t.proceeds) * 100.0
-    } else {
-        0.0
-    };
+    let rate_pct = tax_rate * 100.0;
+    let overlap = present_overlap_params(&q);
+    let spread = spreads.as_ref().map_or_else(String::new, |c| {
+        spread_panel(c, requested.as_deref(), &up, &overlap, has_tax)
+    });
     let cost_note = if position.priced_at_cost {
         r#"<p role="note" class="muted"><small>No recent close for this symbol: the price used is your average cost.</small></p>"#
     } else {
@@ -648,6 +649,7 @@ pub async fn unwind_partial(
 <div class="chart-container">{chart}</div>
 {view}
 {tax_years}
+{spread}
 <p><strong>Illustrative assumptions.</strong> Stock expected return {mu}% and volatility {vol}% a year; rest of the portfolio {rest_mu:.0}% and {rest_sigma:.0}%; correlation {rho}; {paths} simulated paths with random seed {seed}. Schedule prices grow {growth}% a year. Sales are modelled at the start of each year and net proceeds move into the rest of the portfolio. Hold values are before tax that would be due on a later sale; unwind proceeds are reduced by the schedule's average tax rate ({rate:.1}%). Not tax or investment advice.</p>"#,
         kpis = kpis.join("\n"),
         mu = num1(up.mu),
@@ -670,7 +672,7 @@ pub async fn unwind_partial(
     // Only the controls form rewrites the URL: the placeholder's own load
     // request must not, or it would drop limit/candidates/buy.
     if header_is("hx-request", "true") && header_is("hx-trigger", "unwind-controls") {
-        let url = replace_url(requested.as_deref(), &up, &present_overlap_params(&q));
+        let url = replace_url(requested.as_deref(), &up, &overlap);
         if let Ok(v) = HeaderValue::from_str(&url) {
             resp.headers_mut().insert("hx-replace-url", v);
         }
@@ -735,4 +737,176 @@ fn tax_years_panel(years: &[UnwindYear]) -> String {
         &table_rows,
     );
     format!(r#"<h3>Tax by calendar year</h3><div class="chart-container">{chart}</div>{view}"#)
+}
+
+/// "Compare spreads": one row per spread of 1 to 5 years plus a hold reference
+/// row, and (with tax) a stacked bar chart and table view of each spread's tax.
+/// The row for the `years` control is marked current and is not a link; the
+/// others link to the canonical page URL with `years=N`.
+fn spread_panel(
+    c: &SpreadComparison,
+    requested: Option<&str>,
+    up: &UnwindParams,
+    overlap: &[(&'static str, String)],
+    has_tax: bool,
+) -> String {
+    if c.rows.is_empty() {
+        return String::new();
+    }
+    let h = c.horizon;
+    let table = spread_table(c, requested, up, overlap, has_tax);
+    let chart = if has_tax {
+        spread_chart(c)
+    } else {
+        String::new()
+    };
+    format!(
+        r#"<h3>Compare spreads</h3>{table}{chart}<p role="note" class="muted"><small>Spreads differ only in how many years the sale takes. Every spread uses the same assumptions and the same random draws. Tax and after-tax proceeds follow the schedule price path (growth {growth}% a year); the year-{h} values come from the simulation, which applies each spread's own average tax rate to the simulated sale value. Saved vs 1 year applies the 1-year spread's tax rate on the gain to each spread's gain, so a different price path does not count as tax saved. Holding postpones the tax; it does not avoid it. Selling these shares later would owe tax on the gain then, which the hold figures do not subtract.</small></p>"#,
+        growth = num1(up.growth),
+    )
+}
+
+/// The comparison table: header, one row per spread, and the hold row.
+fn spread_table(
+    c: &SpreadComparison,
+    requested: Option<&str>,
+    up: &UnwindParams,
+    overlap: &[(&'static str, String)],
+    has_tax: bool,
+) -> String {
+    let h = c.horizon;
+    let mut head = String::from(r#"<th scope="col">Spread</th>"#);
+    if has_tax {
+        head.push_str(r#"<th scope="col">Calendar years taxed</th><th scope="col">Total tax</th><th scope="col">Tax % of gain</th><th scope="col">Saved vs 1 year</th>"#);
+    }
+    head.push_str(&format!(
+        r#"<th scope="col">After-tax proceeds</th><th scope="col">Year-{h} p10</th><th scope="col">Year-{h} p50</th>"#
+    ));
+    let mut body = String::new();
+    for r in &c.rows {
+        let current = r.years == up.years;
+        let label = if current {
+            format!("{} (current)", spread_label(r.years))
+        } else {
+            let link = UnwindParams {
+                years: r.years,
+                ..up.clone()
+            };
+            format!(
+                r#"<a href="{}">{}</a>"#,
+                html_escape(&replace_url(requested, &link, overlap)),
+                spread_label(r.years)
+            )
+        };
+        let lowest = if has_tax && c.lowest_tax == Some(r.years) {
+            " <strong>Lowest tax rate</strong>"
+        } else {
+            ""
+        };
+        let aria = if current {
+            r#" aria-current="true""#
+        } else {
+            ""
+        };
+        let mut cells = String::new();
+        if let (true, Some(t)) = (has_tax, r.tax) {
+            let saved = match r.saved_vs_1y {
+                Some(v) if r.years > 1 && v >= 0.5 => format!("+{}", fmt_usd(v)),
+                Some(v) if r.years > 1 => fmt_usd(v),
+                _ => "&mdash;".to_string(),
+            };
+            cells.push_str(&format!(
+                "<td>{}</td><td>{}</td><td>{}</td><td>{saved}</td>",
+                r.calendar_years,
+                fmt_usd(t.total),
+                pct1(r.gain_tax_rate),
+            ));
+        }
+        cells.push_str(&format!(
+            "<td>{}</td><td>{}</td><td>{}</td>",
+            fmt_usd(r.net),
+            fmt_usd(r.p10),
+            fmt_usd(r.p50)
+        ));
+        body.push_str(&format!(
+            r#"<tr data-spread="{n}"{aria}><th scope="row">{label}{lowest}</th>{cells}</tr>"#,
+            n = r.years,
+        ));
+    }
+    let deferred = if has_tax {
+        "<td>&mdash;</td><td>deferred</td><td>deferred</td><td>&mdash;</td>"
+    } else {
+        ""
+    };
+    body.push_str(&format!(
+        r#"<tr data-spread="hold"><th scope="row">Hold (no sale, before tax)</th>{deferred}<td>&mdash;</td><td>{}</td><td>{}</td></tr>"#,
+        fmt_usd(c.hold_p10),
+        fmt_usd(c.hold_p50)
+    ));
+    format!(
+        r#"<div class="table-scroll" role="region" aria-label="Spread comparison" tabindex="0"><table><caption>Selling over 1 to {h} years, {} sales, results at year {h}</caption>
+<thead><tr>{head}</tr></thead>
+<tbody>{body}</tbody></table></div>"#,
+        cadence_name(up.cadence)
+    )
+}
+
+/// Stacked tax bars per spread plus their table view (tax settings only).
+fn spread_chart(c: &SpreadComparison) -> String {
+    let h = c.horizon;
+    let taxed: Vec<_> = c
+        .rows
+        .iter()
+        .filter_map(|r| r.tax.map(|t| (r, t)))
+        .collect();
+    let bars: Vec<TaxYearBar> = taxed
+        .iter()
+        .map(|(r, t)| TaxYearBar {
+            label: format!("{} yr", r.years),
+            federal: t.federal.max(0.0),
+            state: t.state.max(0.0),
+            niit: t.niit.max(0.0),
+        })
+        .collect();
+    let desc = format!(
+        "Stacked bars of federal, state and NIIT tax for each spread. {}.",
+        taxed
+            .iter()
+            .map(|(r, t)| format!(
+                "{} yr: total tax {}, year-{h} p10 {}",
+                r.years,
+                fmt_usd(t.total),
+                fmt_usd(r.p10)
+            ))
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    let svg = accessible_with_id(
+        &tax_by_year_svg(&bars, 640, 320),
+        "Tax by spread length",
+        &desc,
+        "unwind-spread-tax",
+    );
+    let rows: Vec<Vec<String>> = taxed
+        .iter()
+        .map(|(r, t)| {
+            vec![
+                spread_label(r.years),
+                fmt_usd(t.federal),
+                fmt_usd(t.state),
+                fmt_usd(t.niit),
+                fmt_usd(t.total),
+            ]
+        })
+        .collect();
+    let view = table_view(
+        "Tax by spread: federal, state and NIIT",
+        &["Spread", "Federal", "State", "NIIT", "Total"],
+        &rows,
+    );
+    format!(r#"<div class="chart-container">{svg}</div>{view}"#)
+}
+
+fn spread_label(years: u32) -> String {
+    format!("{years} {}", if years == 1 { "year" } else { "years" })
 }
