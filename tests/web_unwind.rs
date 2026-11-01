@@ -527,13 +527,26 @@ async fn test_partial_when_symbol_lowercase_should_work() {
 #[tokio::test]
 async fn test_partial_table_should_have_caption_and_column_scopes() {
     let body = get(&app_tx(), &partial("years=1")).await.text();
-    assert!(body.contains("<caption"));
-    let ths = open_tags(&body, "th");
+    // The schedule table is the one whose caption mentions "unwind:". Other tables in the panel
+    // (e.g. the spread comparison) may use row headers.
+    let cap = body.find("unwind:").expect("schedule table caption");
+    let start = body[..cap].rfind("<table").expect("schedule <table>");
+    let end = body[start..].find("</table>").expect("</table>") + start;
+    let table = &body[start..end];
+    assert!(table.contains("<caption"));
+    let ths = open_tags(table, "th");
     assert!(!ths.is_empty());
     assert!(
         ths.iter()
             .all(|t| attr(t, "scope").as_deref() == Some("col")),
         "{ths:?}"
+    );
+    // Everywhere else a header must still be scoped, as a column or a row header.
+    assert!(
+        open_tags(&body, "th")
+            .iter()
+            .all(|t| matches!(attr(t, "scope").as_deref(), Some("col") | Some("row"))),
+        "unscoped <th> in the panel"
     );
 }
 
@@ -836,11 +849,13 @@ async fn test_partial_assumptions_should_show_at_most_one_decimal() {
     let body = get(&app(), &partial("years=1&mu=7.25&vol=33.333&growth=2.55"))
         .await
         .text();
+    // Visible text only: link URLs (e.g. the spread links) carry the normalised raw values.
+    let text = strip_tags(&body);
     for bad in ["7.25%", "33.33", "2.55%"] {
         assert!(
-            !body.contains(bad),
+            !text.contains(bad),
             "{bad} should be rounded to one decimal"
         );
     }
-    assert!(body.contains("33.3%"));
+    assert!(text.contains("33.3%"));
 }

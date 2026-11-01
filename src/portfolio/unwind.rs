@@ -4,8 +4,11 @@
 //! equal-share periods, picks lots highest-cost-first, taxes each sale per
 //! calendar year with [`year_tax`] and tracks the stock's weight afterwards. [`project`]
 //! compares holding with following the schedule on two correlated lognormal
-//! assets (the stock and "the rest"). Everything is deterministic: no clock,
-//! no I/O, and the random stream is a seeded [`ChaCha12Rng`].
+//! assets (the stock and "the rest"). [`compare_spreads`] runs both for a sale
+//! spread over 1 to N years so the spreads can be compared side by side: each
+//! one reuses the same seed, hence the same random shocks, and differs only in
+//! how long the sale takes. Everything is deterministic: no clock, no I/O, and
+//! the random stream is a seeded [`ChaCha12Rng`].
 
 use chrono::{Datelike, Months, NaiveDate};
 use rand::SeedableRng;
@@ -227,6 +230,34 @@ pub fn build_schedule(input: &UnwindInput) -> UnwindSchedule {
     }
 }
 
+/// Per-year share of the ORIGINAL shares sold, of length `years`: period `k`
+/// belongs to year `k / sales_per_year`. Sums to 1 when there are shares to
+/// sell; all zeros otherwise.
+pub fn sell_fractions(schedule: &UnwindSchedule, cadence: Cadence, years: u32) -> Vec<f64> {
+    let per_year = cadence.per_year() as usize;
+    let mut fractions = vec![0.0; years as usize];
+    if schedule.totals.shares > 0.0 {
+        for (k, p) in schedule.periods.iter().enumerate() {
+            debug_assert!(
+                k / per_year < years as usize,
+                "schedule has periods beyond `years`"
+            );
+            if let Some(f) = fractions.get_mut(k / per_year) {
+                *f += p.shares / schedule.totals.shares;
+            }
+        }
+    }
+    fractions
+}
+
+/// Tax divided by proceeds; 0 without tax settings or without proceeds.
+pub fn effective_tax_rate(totals: &UnwindTotals) -> f64 {
+    match totals.tax {
+        Some(t) if totals.proceeds > 0.0 => t / totals.proceeds,
+        _ => 0.0,
+    }
+}
+
 // ─── Projection ─────────────────────────────────────────────────────────────
 
 pub const DEFAULT_STOCK_MU: f64 = 0.08;
@@ -369,5 +400,148 @@ pub fn project(input: &ProjectionInput, seed: u64) -> Projection {
             .collect(),
         weight_p50_hold: hold_w.iter_mut().map(|v| median(v)).collect(),
         weight_p50_unwind: unw_w.iter_mut().map(|v| median(v)).collect(),
+    }
+}
+
+// ─── Spread comparison ──────────────────────────────────────────────────────
+
+/// Longest spread the hub compares (1 to this many years).
+pub const SPREAD_MAX_YEARS: u32 = 5;
+
+/// Tax rates closer than this (0.05 percentage points) tie; the shorter spread wins.
+const LOWEST_RATE_TIE: f64 = 0.0005;
+
+/// One spread (selling over `years` years) in a [`SpreadComparison`].
+#[derive(Debug, Clone)]
+pub struct SpreadRow {
+    pub years: u32,
+    /// Number of sales in the schedule.
+    pub sales: usize,
+    /// Calendar years that contain at least one sale.
+    pub calendar_years: usize,
+    pub proceeds: f64,
+    /// The schedule's per-calendar-year tax summed component by component
+    /// (`total` equals the schedule's total tax); `None` without tax settings.
+    pub tax: Option<YearTax>,
+    pub net: f64,
+    /// [`effective_tax_rate`] of the schedule.
+    pub tax_rate: f64,
+    /// Total gain of the schedule.
+    pub gain: f64,
+    /// Average tax rate on the gain (`tax / gain`); 0 without tax settings or
+    /// when the gain is not positive.
+    pub gain_tax_rate: f64,
+    /// `(1-year gain_tax_rate - gain_tax_rate) * gain`: what this spread saves
+    /// when the 1-year spread's rate on the gain is applied to its gain (signed,
+    /// so a different price path is not counted as tax saved). `None` without
+    /// tax settings.
+    pub saved_vs_1y: Option<f64>,
+    /// Portfolio value at the comparison horizon when following this spread.
+    pub p10: f64,
+    pub p50: f64,
+}
+
+/// Spreads of 1 to `horizon` years side by side, plus the hold reference.
+#[derive(Debug, Clone)]
+pub struct SpreadComparison {
+    /// Years the projections run (the longest spread).
+    pub horizon: u32,
+    /// Hold portfolio value at the horizon (identical for every row).
+    pub hold_p10: f64,
+    pub hold_p50: f64,
+    /// N = 1..=horizon in order.
+    pub rows: Vec<SpreadRow>,
+    /// The spread with the lowest tax rate on the gain (rates within 0.05 percentage points
+    /// tie and go to the shorter one); `None` without tax settings or rows.
+    pub lowest_tax: Option<u32>,
+}
+
+/// Compare selling over 1..=`max_years` years. `base.years` and the
+/// `years`, `sell_fractions` and `tax_rate` of `proj` are overridden per
+/// spread; every projection runs over `max_years` with the same `seed`, so the
+/// spreads share their random shocks.
+pub fn compare_spreads(
+    base: &UnwindInput,
+    proj: &ProjectionInput,
+    max_years: u32,
+    seed: u64,
+) -> SpreadComparison {
+    let mut rows = Vec::with_capacity(max_years as usize);
+    let mut hold: Option<FanChartYear> = None;
+    for n in 1..=max_years {
+        let schedule = build_schedule(&UnwindInput {
+            years: n,
+            ..base.clone()
+        });
+        let tax_rate = effective_tax_rate(&schedule.totals);
+        let mut pi = proj.clone();
+        pi.years = max_years;
+        pi.sell_fractions = sell_fractions(&schedule, base.cadence, n);
+        pi.tax_rate = tax_rate;
+        let p = project(&pi, seed);
+        let at = max_years as usize;
+        hold.get_or_insert(p.hold[at]);
+        let tax = base.tax.as_ref().map(|_| {
+            schedule.years.iter().filter_map(|y| y.tax).fold(
+                YearTax {
+                    federal: 0.0,
+                    state: 0.0,
+                    niit: 0.0,
+                    total: 0.0,
+                },
+                |a, t| YearTax {
+                    federal: a.federal + t.federal,
+                    state: a.state + t.state,
+                    niit: a.niit + t.niit,
+                    total: a.total + t.total,
+                },
+            )
+        });
+        rows.push(SpreadRow {
+            years: n,
+            sales: schedule.periods.len(),
+            calendar_years: schedule.years.len(),
+            proceeds: schedule.totals.proceeds,
+            tax,
+            net: schedule.totals.net,
+            gain: schedule.totals.gain,
+            gain_tax_rate: match tax {
+                Some(t) if schedule.totals.gain > 0.0 => t.total / schedule.totals.gain,
+                _ => 0.0,
+            },
+            tax_rate,
+            saved_vs_1y: None,
+            p10: p.unwind[at].p10,
+            p50: p.unwind[at].p50,
+        });
+    }
+    let hold = hold.unwrap_or_else(|| {
+        let mut pi = proj.clone();
+        pi.years = max_years;
+        pi.sell_fractions = Vec::new();
+        pi.tax_rate = 0.0;
+        project(&pi, seed).hold[max_years as usize]
+    });
+    let first_rate = rows.first().map(|r| r.gain_tax_rate);
+    for r in &mut rows {
+        if let (Some(f), Some(_)) = (first_rate, r.tax) {
+            r.saved_vs_1y = Some((f - r.gain_tax_rate) * r.gain);
+        }
+    }
+    let min = rows
+        .iter()
+        .filter(|r| r.tax.is_some())
+        .map(|r| r.gain_tax_rate)
+        .fold(f64::INFINITY, f64::min);
+    let lowest_tax = rows
+        .iter()
+        .find(|r| r.tax.is_some() && r.gain_tax_rate <= min + LOWEST_RATE_TIE)
+        .map(|r| r.years);
+    SpreadComparison {
+        horizon: max_years,
+        hold_p10: hold.p10,
+        hold_p50: hold.p50,
+        rows,
+        lowest_tax,
     }
 }
