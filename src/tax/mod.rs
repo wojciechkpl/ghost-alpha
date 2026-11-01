@@ -4,3 +4,4 @@ pub mod harvest;
 pub mod hifo;
 pub mod projection;
 pub mod wash_sale;
+pub mod year;
