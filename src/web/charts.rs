@@ -1439,6 +1439,86 @@ pub fn horizontal_bar_svg(bars: &[HBar], width: u32, height: u32) -> String {
     )
 }
 
+// ── Tax by year ──────────────────────────────────────────────────────────────
+
+/// One calendar year of tax, split by component (all amounts >= 0).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaxYearBar {
+    pub label: String,
+    pub federal: f64,
+    pub state: f64,
+    pub niit: f64,
+}
+
+/// Stacked vertical bars of tax per year: federal (bottom), state, NIIT (top),
+/// filled with `--ga-series-1..3`. A text legend names the three components.
+pub fn tax_by_year_svg(bars: &[TaxYearBar], width: u32, height: u32) -> String {
+    const COMPONENTS: [(&str, &str); 3] = [
+        ("Federal", "var(--ga-series-1)"),
+        ("State", "var(--ga-series-2)"),
+        ("NIIT", "var(--ga-series-3)"),
+    ];
+    let amt = |v: f64| if v.is_finite() && v > 0.0 { v } else { 0.0 };
+    let (left, right, top, bottom) = (56.0_f64, 12.0_f64, 30.0_f64, 28.0_f64);
+    let plot_w = (width as f64 - left - right).max(1.0);
+    let plot_h = (height as f64 - top - bottom).max(1.0);
+    let max_total = bars
+        .iter()
+        .map(|b| amt(b.federal) + amt(b.state) + amt(b.niit))
+        .fold(0.0_f64, f64::max);
+    let scale = max_total.max(1.0);
+    let base = top + plot_h;
+
+    let mut body = String::new();
+    // Legend (text labels, so colour is never the only cue).
+    let mut lx = left;
+    for (name, fill) in COMPONENTS {
+        body.push_str(&format!(
+            r#"<circle cx="{cx:.1}" cy="15" r="5" fill="{fill}"/><text x="{tx:.1}" y="19" font-size="11" fill="var(--ga-text)">{name}</text>"#,
+            cx = lx + 5.0,
+            tx = lx + 14.0,
+        ));
+        lx += 80.0;
+    }
+    // Axis: baseline plus the max value as a tick.
+    body.push_str(&format!(
+        r#"<line x1="{left:.1}" y1="{base:.1}" x2="{x2:.1}" y2="{base:.1}" stroke="var(--ga-border)"/><text x="{tx:.1}" y="{ty:.1}" font-size="11" text-anchor="end" fill="var(--ga-text)">{max}</text><text x="{tx:.1}" y="{by:.1}" font-size="11" text-anchor="end" fill="var(--ga-text)">$0</text>"#,
+        x2 = left + plot_w,
+        tx = left - 4.0,
+        ty = top + 4.0,
+        by = base + 4.0,
+        max = format_dollars(scale),
+    ));
+
+    let n = bars.len().max(1) as f64;
+    let slot = plot_w / n;
+    let bar_w = (slot * 0.6).min(80.0);
+    for (i, b) in bars.iter().enumerate() {
+        let x = left + slot * i as f64 + (slot - bar_w) / 2.0;
+        let mut y = base;
+        for ((_, fill), v) in COMPONENTS.iter().zip([b.federal, b.state, b.niit]) {
+            let h = amt(v) / scale * plot_h;
+            if h <= 0.0 {
+                continue;
+            }
+            y -= h;
+            body.push_str(&format!(
+                r#"<rect x="{x:.1}" y="{y:.3}" width="{bar_w:.1}" height="{h:.3}" fill="{fill}" stroke="var(--ga-bg)"/>"#
+            ));
+        }
+        body.push_str(&format!(
+            r#"<text x="{cx:.1}" y="{ly:.1}" font-size="11" text-anchor="middle" fill="var(--ga-text)">{label}</text>"#,
+            cx = x + bar_w / 2.0,
+            ly = base + 16.0,
+            label = svg_escape(&b.label),
+        ));
+    }
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">{body}</svg>"#
+    )
+}
+
 // ── Timeline Bar Chart ───────────────────────────────────────────────────────
 
 /// A single period in a timeline bar chart (target vs executed).

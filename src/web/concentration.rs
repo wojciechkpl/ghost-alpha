@@ -28,7 +28,7 @@ use super::charts::{accessible, donut_svg, svg_escape, DonutSlice};
 use super::shell::{html_escape, page, table_view};
 use super::AppState;
 
-const PAGE_PATH: &str = "/portfolio/concentration";
+pub(super) const PAGE_PATH: &str = "/portfolio/concentration";
 const PARTIAL_PATH: &str = "/partials/etf-overlap";
 const TITLE: &str = "Concentration & Diversification";
 
@@ -92,26 +92,32 @@ pub(super) fn parse_symbol(q: &HashMap<String, String>) -> Result<Option<String>
     }
 }
 
-/// Parse and validate. The error is a static message that never contains input.
-fn parse_params(q: &HashMap<String, String>) -> Result<Params, &'static str> {
-    let non_empty = |k: &str| q.get(k).map(String::as_str).filter(|v| !v.is_empty());
+fn non_empty<'a>(q: &'a HashMap<String, String>, k: &str) -> Option<&'a str> {
+    q.get(k).map(String::as_str).filter(|v| !v.is_empty())
+}
 
-    let symbol = parse_symbol(q)?;
-    let limit = match non_empty("limit") {
-        None => DEFAULT_LIMIT,
+fn parse_limit(raw: Option<&str>) -> Result<f64, &'static str> {
+    match raw {
+        None => Ok(DEFAULT_LIMIT),
         Some(s) => match s.parse::<f64>() {
-            Ok(v) if v.is_finite() && v > 0.0 && v <= 100.0 => v,
-            _ => return Err("Invalid limit: expected a number above 0 and at most 100."),
+            Ok(v) if v.is_finite() && v > 0.0 && v <= 100.0 => Ok(v),
+            _ => Err("Invalid limit: expected a number above 0 and at most 100."),
         },
-    };
-    let buy = match non_empty("buy") {
-        None => DEFAULT_BUY,
+    }
+}
+
+fn parse_buy(raw: Option<&str>) -> Result<f64, &'static str> {
+    match raw {
+        None => Ok(DEFAULT_BUY),
         Some(s) => match s.parse::<f64>() {
-            Ok(v) if v.is_finite() && v > 0.0 && v <= MAX_BUY => v,
-            _ => return Err("Invalid buy amount: expected a number above 0 and at most 1e12."),
+            Ok(v) if v.is_finite() && v > 0.0 && v <= MAX_BUY => Ok(v),
+            _ => Err("Invalid buy amount: expected a number above 0 and at most 1e12."),
         },
-    };
-    let raw = non_empty("candidates").unwrap_or(DEFAULT_CANDIDATES);
+    }
+}
+
+fn parse_candidates(raw: Option<&str>) -> Result<Vec<String>, &'static str> {
+    let raw = raw.unwrap_or(DEFAULT_CANDIDATES);
     let parts: Vec<&str> = raw.split(',').collect();
     if parts.len() > MAX_CANDIDATES {
         return Err("Too many candidates: at most 10 tickers.");
@@ -126,12 +132,40 @@ fn parse_params(q: &HashMap<String, String>) -> Result<Params, &'static str> {
             candidates.push(t);
         }
     }
+    Ok(candidates)
+}
+
+/// Parse and validate. The error is a static message that never contains input.
+fn parse_params(q: &HashMap<String, String>) -> Result<Params, &'static str> {
     Ok(Params {
-        symbol,
-        limit,
-        candidates,
-        buy,
+        symbol: parse_symbol(q)?,
+        limit: parse_limit(non_empty(q, "limit"))?,
+        buy: parse_buy(non_empty(q, "buy"))?,
+        candidates: parse_candidates(non_empty(q, "candidates"))?,
     })
+}
+
+/// The overlap parameters that are present AND valid under this page's rules,
+/// as normalised `(name, value)` pairs in the order limit, candidates, buy.
+/// An invalid one is dropped.
+pub(super) fn present_overlap_params(q: &HashMap<String, String>) -> Vec<(&'static str, String)> {
+    let mut out = Vec::new();
+    if let Some(raw) = non_empty(q, "limit") {
+        if let Ok(v) = parse_limit(Some(raw)) {
+            out.push(("limit", v.to_string()));
+        }
+    }
+    if let Some(raw) = non_empty(q, "candidates") {
+        if let Ok(v) = parse_candidates(Some(raw)) {
+            out.push(("candidates", v.join(",")));
+        }
+    }
+    if let Some(raw) = non_empty(q, "buy") {
+        if let Ok(v) = parse_buy(Some(raw)) {
+            out.push(("buy", v.to_string()));
+        }
+    }
+    out
 }
 
 pub(super) fn bad_request(fragment: bool, msg: &str) -> Response {
@@ -314,7 +348,8 @@ pub async fn concentration_page(
         return page(&state, PAGE_PATH, TITLE, body).await.into_response();
     };
     let title = format!("{TITLE} \u{2014} {}", summary.symbol);
-    let body = page_body(&pf, &summary, &params, &unwind_params);
+    let overlap = present_overlap_params(&q);
+    let body = page_body(&pf, &summary, &params, &unwind_params, &overlap);
     page(&state, PAGE_PATH, &title, &body).await.into_response()
 }
 
@@ -323,12 +358,18 @@ fn page_body(
     s: &ConcentrationSummary,
     p: &Params,
     up: &super::unwind::UnwindParams,
+    overlap_params: &[(&'static str, String)],
 ) -> String {
     let at_cost = pf.positions.iter().filter(|x| x.priced_at_cost).count();
     let as_of = pf
         .priced_as_of
         .map_or_else(|| "no prices".to_string(), |d| format!("prices as of {d}"));
     let top1_pct = s.top1.1 * 100.0;
+    let held = pf
+        .positions
+        .iter()
+        .any(|x| x.ticker.eq_ignore_ascii_case(&s.symbol));
+    let show_controls = held && (p.symbol.is_some() || valid_ticker(&s.symbol));
     let limit = num1(p.limit);
     let limit_status = if top1_pct > p.limit {
         format!(
@@ -454,6 +495,7 @@ fn page_body(
 </div>
 <section aria-labelledby="unwind-h">
   <h2 id="unwind-h">Unwind schedule and projection for {sym}</h2>
+  {controls}
   <div class="unwind-live" aria-live="polite">
     {unwind}
   </div>
@@ -461,6 +503,8 @@ fn page_body(
 <p class="muted"><small>Equity holdings only; debt and derivatives are listed separately. Not tax or investment advice.</small></p>"#,
         lots = pf.lot_count,
         sym = html_escape(&s.symbol),
+        controls =
+            super::unwind::controls_form(p.symbol.as_deref(), up, overlap_params, show_controls),
         unwind = super::unwind::region_placeholder(&s.symbol, p.symbol.is_none(), up),
     )
 }

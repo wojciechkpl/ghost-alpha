@@ -87,6 +87,20 @@ pub struct UnwindTotals {
 pub struct UnwindSchedule {
     pub periods: Vec<UnwindPeriod>,
     pub totals: UnwindTotals,
+    /// Per calendar year of the sale dates, ascending, no empty years.
+    pub years: Vec<UnwindYear>,
+}
+
+/// One calendar year of the schedule: summed period figures and that year's tax.
+#[derive(Debug, Clone)]
+pub struct UnwindYear {
+    pub year: i32,
+    pub shares: f64,
+    pub proceeds: f64,
+    pub short_term_gain: f64,
+    pub long_term_gain: f64,
+    /// `None` without tax settings; otherwise [`year_tax`] of the year's gains.
+    pub tax: Option<YearTax>,
 }
 
 /// Build the unwind schedule. Empty when there is nothing to sell or no years.
@@ -101,6 +115,7 @@ pub fn build_schedule(input: &UnwindInput) -> UnwindSchedule {
     };
 
     let mut periods = Vec::with_capacity(n);
+    let mut years: Vec<UnwindYear> = Vec::new();
     if n > 0 && total_shares > 0.0 {
         let per = total_shares / n as f64;
         let mut sold = 0.0;
@@ -121,6 +136,14 @@ pub fn build_schedule(input: &UnwindInput) -> UnwindSchedule {
             };
             if date.year() != ytd.0 {
                 ytd = (date.year(), 0.0, 0.0);
+                years.push(UnwindYear {
+                    year: date.year(),
+                    shares: 0.0,
+                    proceeds: 0.0,
+                    short_term_gain: 0.0,
+                    long_term_gain: 0.0,
+                    tax: None,
+                });
             }
 
             let (mut cost_basis, mut lt, mut st) = (0.0, 0.0, 0.0);
@@ -143,6 +166,12 @@ pub fn build_schedule(input: &UnwindInput) -> UnwindSchedule {
             ytd.1 += st;
             ytd.2 += lt;
             let proceeds = shares * price;
+            if let Some(y) = years.last_mut() {
+                y.shares += shares;
+                y.proceeds += proceeds;
+                y.short_term_gain = ytd.1;
+                y.long_term_gain = ytd.2;
+            }
             let gain = proceeds - cost_basis;
             let net = proceeds - tax.unwrap_or(0.0);
             cum_net += net;
@@ -186,7 +215,16 @@ pub fn build_schedule(input: &UnwindInput) -> UnwindSchedule {
             .map(|_| periods.iter().filter_map(|p| p.tax).sum()),
         net: sum(|p| p.net),
     };
-    UnwindSchedule { periods, totals }
+    if let Some(t) = input.tax.as_ref() {
+        for y in &mut years {
+            y.tax = Some(year_tax(y.short_term_gain, y.long_term_gain, t));
+        }
+    }
+    UnwindSchedule {
+        periods,
+        totals,
+        years,
+    }
 }
 
 // ─── Projection ─────────────────────────────────────────────────────────────

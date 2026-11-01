@@ -4,6 +4,10 @@ All notable changes to GhostAlpha are documented in this file.
 
 ## [Unreleased] — v2.0
 
+### Concentration hub: what-if controls and tax by year
+- **New:** a what-if controls form on `/portfolio/concentration` (years, cadence, growth, mu, vol) re-runs the unwind panel through htmx (debounced; without JavaScript the form reloads the page) and keeps the address bar in sync with `HX-Replace-Url`; `symbol`, `limit`, `candidates` and `buy` are preserved. Only validated, normalised values are reflected in the form and the URL
+- **New:** with a supported `[profile]` state, the unwind panel adds a "Tax by calendar year" stacked bar chart (federal, state, NIIT) and table view with the tax as a share of proceeds; `build_schedule` exposes the per-year totals as `UnwindSchedule.years`
+
 ### Concentration hub: unwind schedule and projection
 - **New:** `/portfolio/concentration` gains a lazily loaded unwind panel (`/partials/unwind`): how selling the concentrated position over 1-10 years (quarterly or annual, `years`, `cadence`) plays out per period: shares, proceeds, tax, net and the stock's weight afterwards. Lots are sold highest-cost first and Tax is computed per calendar year, not per lot: short- and long-term gains net within the year, long-term gains stack on other income plus net short-term gain, NIIT applies to the part above the threshold, and each period is charged the change in the year's total tax. Long versus short term is judged at each sale date. The panel states the bracket year (2024) and filing status; married filing separately, head of household and unrecognised values use the single schedule Without a state in the profile the tax column is left out and the panel points to `ghost-alpha setup --section profile`
 - **New:** a seeded Monte Carlo fan chart (2,000 paths, two correlated lognormal assets: the stock with `mu`/`vol`, the rest of the portfolio at 6% and 15%, correlation 0.6) compares holding with following the schedule, with a dashed hold-median line, a table view and p10 downside KPIs. The same inputs always give the same chart. Illustrative assumptions are listed in the panel; not tax or investment advice
